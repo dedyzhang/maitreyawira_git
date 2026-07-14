@@ -267,7 +267,8 @@ class SiswaController extends Controller
             Excel::import($import, $request->file('file'));
 
             $msg = "Import selesai: {$import->imported} siswa berhasil ditambahkan."
-                 . ($import->skipped > 0 ? " ({$import->skipped} baris dilewati)" : '');
+                 . ($import->skipped > 0 ? " ({$import->skipped} baris dilewati)" : '')
+                 . ($import->agamaTidakValid > 0 ? " {$import->agamaTidakValid} data agama diabaikan karena tidak sesuai pilihan dropdown." : '');
 
             // Kredensial (password plaintext) HANYA ada di titik ini — simpan sementara
             // di session supaya bisa diunduh sekali via tombol di halaman berikutnya.
