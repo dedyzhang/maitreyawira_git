@@ -10,6 +10,7 @@ use App\Models\PenjabaranKomponen;
 use App\Models\RolePermission;
 use App\Models\Semester;
 use App\Models\Setting;
+use App\Support\ModulAktif;
 use App\Support\Uploads;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,8 +50,9 @@ class SettingController extends Controller
 
         $settings = Setting::pluck('value', 'key');
         $aturans = Aturan::orderBy('kode')->get();
+        $modulFitur = ModulAktif::semua();
 
-        return view('setting.index', compact('semester', 'semesterAktif', 'kelas', 'pelajarans', 'settings', 'aturans'));
+        return view('setting.index', compact('semester', 'semesterAktif', 'kelas', 'pelajarans', 'settings', 'aturans', 'modulFitur'));
     }
 
     public function updateSemester(Request $request)
@@ -147,13 +149,23 @@ class SettingController extends Controller
             'sekolah_lat' => 'nullable|numeric|between:-90,90',
             'sekolah_lng' => 'nullable|numeric|between:-180,180',
             'absen_radius' => 'required|integer|min:10|max:5000',
+            'qr_absensi_mode' => 'nullable|in:harian,tetap',
         ]);
         Setting::set('sekolah_lat', $request->sekolah_lat);
         Setting::set('sekolah_lng', $request->sekolah_lng);
         Setting::set('absen_radius', $request->absen_radius);
         Setting::set('qr_absensi_aktif', $request->boolean('qr_absensi_aktif') ? '1' : '0');
+        Setting::set('qr_absensi_mode', $request->input('qr_absensi_mode', 'harian'));
 
         return back()->with('success', 'Lokasi & QR absensi disimpan.');
+    }
+
+    /** Buat ulang token QR mode "tetap" — dipakai bila QR lama dicurigai bocor/disalahgunakan. */
+    public function regenerateQrTokenTetap()
+    {
+        Setting::set('qr_absensi_token_tetap', Str::random(12));
+
+        return back()->with('success', 'Token QR tetap berhasil dibuat ulang. QR lama tidak berlaku lagi — cetak & tempel ulang QR yang baru.');
     }
 
     public function setMapelRapor(Request $request)
@@ -381,6 +393,16 @@ class SettingController extends Controller
         $this->handleAppFile($request, 'app_windows', 'windows', 'app_windows_path', 'app_windows_name');
 
         return back()->with('success', 'Pengaturan unduh aplikasi disimpan.');
+    }
+
+    /** On/off modul sekolah (tab Fitur). Default aktif; bisa dimatikan sementara. */
+    public function updateFitur(Request $request)
+    {
+        foreach (ModulAktif::kodeValid() as $kode) {
+            Setting::set(ModulAktif::settingKey($kode), $request->boolean($kode) ? '1' : '0');
+        }
+
+        return back()->with('success', 'Pengaturan fitur disimpan. Modul yang dimatikan disembunyikan dari menu dan tidak bisa diakses.');
     }
 
     /** Simpan/hapus satu file aplikasi ke disk privat + catat nama asli untuk nama unduhan. */

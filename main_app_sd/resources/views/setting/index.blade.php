@@ -2,21 +2,57 @@
 @section('title', 'Pengaturan')
 
 @section('content')
-<div class="max-w-4xl mx-auto" x-data="{ tab: 'sekolah' }">
+<div class="max-w-4xl mx-auto" x-data="{ tab: '{{ request('tab', 'fitur') }}' }">
     <div class="mb-6">
         <h1 class="page-title">Pengaturan Sistem</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Konfigurasi sekolah, semester, dan penilaian</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Konfigurasi sekolah, semester, penilaian, dan fitur aktif</p>
     </div>
 
     {{-- Tabs --}}
     <div class="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-2xl p-1.5 mb-6 flex-wrap">
-        @foreach(['sekolah'=>['Identitas','building-2'],'semester'=>['Semester','calendar-days'],'penilaian'=>['Penilaian','calculator'],'absensi'=>['Absensi','clock'],'disiplin'=>['Kedisiplinan','shield-alert'],'sosmed'=>['Media Sosial','share-2'],'aplikasi'=>['Aplikasi','smartphone']] as $key => [$label,$icon])
+        @foreach(['fitur'=>['Fitur','toggle-left'],'sekolah'=>['Identitas','building-2'],'semester'=>['Semester','calendar-days'],'penilaian'=>['Penilaian','calculator'],'absensi'=>['Absensi','clock'],'disiplin'=>['Kedisiplinan','shield-alert'],'sosmed'=>['Media Sosial','share-2'],'aplikasi'=>['Aplikasi','smartphone']] as $key => [$label,$icon])
         <button @click="tab='{{ $key }}'"
                 :class="tab==='{{ $key }}' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
                 class="seg flex-1 min-w-fit flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition">
             <i data-lucide="{{ $icon }}" class="w-4 h-4"></i> {{ $label }}
         </button>
         @endforeach
+    </div>
+
+    {{-- Fitur On/Off --}}
+    <div x-show="tab==='fitur'" x-transition>
+        <form method="POST" action="{{ route('setting.fitur') }}" class="card p-6 space-y-5">
+            @csrf
+            <div>
+                <h2 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><i data-lucide="toggle-left" class="w-4 h-4 text-primary"></i> Fitur Aktif</h2>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Geser untuk matikan fitur yang tidak dipakai satuan pendidikan. Bisa dihidupkan kembali kapan saja. Fitur yang dimatikan hilang dari menu dan tidak bisa diakses.</p>
+            </div>
+
+            <div class="space-y-2.5">
+                @foreach($modulFitur as $kode => $meta)
+                @php $on = ($settings[\App\Support\ModulAktif::settingKey($kode)] ?? '1') === '1'; @endphp
+                <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3"
+                     x-data="{ on: {{ $on ? 'true' : 'false' }} }">
+                    <div class="min-w-0 flex items-start gap-3">
+                        <div class="mt-0.5 w-9 h-9 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 grid place-items-center flex-shrink-0">
+                            <i data-lucide="{{ $meta['ikon'] }}" class="w-4 h-4 text-primary"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ $meta['label'] }}</p>
+                            <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">{{ $meta['deskripsi'] }}</p>
+                            <p class="text-xs mt-1.5 font-semibold" :class="on ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'" x-text="on ? '● Aktif' : '○ Nonaktif'"></p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+                        <input type="checkbox" name="{{ $kode }}" value="1" class="sr-only peer" x-model="on">
+                        <div class="relative w-11 h-6 bg-slate-200 dark:bg-slate-600 rounded-full peer-checked:bg-[color:var(--cp)] transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition peer-checked:after:translate-x-5"></div>
+                    </label>
+                </div>
+                @endforeach
+            </div>
+
+            <button type="submit" class="btn-primary px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Simpan Fitur</button>
+        </form>
     </div>
 
     {{-- Identitas --}}
@@ -423,10 +459,13 @@
         <div class="card p-6" x-data="qrLokasi({ lat:@js($settings['sekolah_lat'] ?? ''), lng:@js($settings['sekolah_lng'] ?? '') })" x-init="init()">
             <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
                 <h2 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><i data-lucide="map-pin" class="w-[18px] h-[18px] text-primary"></i> Lokasi & QR Absensi</h2>
-                <a href="{{ route('qr.absensi') }}" class="text-xs text-primary font-semibold flex items-center gap-1"><i data-lucide="qr-code" class="w-3.5 h-3.5"></i> Lihat QR hari ini</a>
+                <div class="flex items-center gap-3">
+                    <a href="{{ route('qr.absensi') }}" class="text-xs text-primary font-semibold flex items-center gap-1"><i data-lucide="qr-code" class="w-3.5 h-3.5"></i> Lihat QR</a>
+                    <a href="{{ route('qr.cetak') }}" target="_blank" class="text-xs text-primary font-semibold flex items-center gap-1"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Cetak QR</a>
+                </div>
             </div>
             <p class="text-xs text-slate-400 mb-4">Tetapkan titik sekolah & radius. Absen QR hanya berhasil di dalam radius ini.</p>
-            <form method="POST" action="{{ route('setting.lokasiQr') }}" class="space-y-4">
+            <form method="POST" action="{{ route('setting.lokasiQr') }}" class="space-y-4" x-data="{ mode: @js($settings['qr_absensi_mode'] ?? 'harian') }">
                 @csrf
                 <div id="setMap" style="height:240px" class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 z-0"></div>
                 <p class="text-xs text-slate-400">Klik di peta untuk menetapkan titik sekolah, atau gunakan tombol lokasi.</p>
@@ -444,6 +483,28 @@
                         <input type="number" name="absen_radius" value="{{ $settings['absen_radius'] ?? 100 }}" min="10" max="5000" class="form-input">
                     </div>
                 </div>
+
+                {{-- Mode QR: harian (otomatis berganti) atau tetap (satu QR permanen, cocok utk dicetak & ditempel) --}}
+                <div>
+                    <label class="form-label">Mode QR Absensi</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="qr_absensi_mode" value="harian" x-model="mode" class="sr-only peer">
+                            <div class="border-2 rounded-xl p-3.5 transition peer-checked:border-primary peer-checked:bg-primary-50 border-slate-200 dark:border-slate-600 h-full">
+                                <p class="font-bold text-sm text-slate-700 dark:text-slate-200 flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-4 h-4 text-slate-400"></i> Ganti Setiap Hari</p>
+                                <p class="text-xs text-slate-400 mt-1">QR otomatis berubah tiap hari — lebih aman dari QR lama yang difoto/disebarluaskan. Cetak/tampilkan ulang tiap pagi.</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="qr_absensi_mode" value="tetap" x-model="mode" class="sr-only peer">
+                            <div class="border-2 rounded-xl p-3.5 transition peer-checked:border-primary peer-checked:bg-primary-50 border-slate-200 dark:border-slate-600 h-full">
+                                <p class="font-bold text-sm text-slate-700 dark:text-slate-200 flex items-center gap-1.5"><i data-lucide="pin" class="w-4 h-4 text-slate-400"></i> Satu QR Tetap</p>
+                                <p class="text-xs text-slate-400 mt-1">QR sama setiap hari — cetak sekali, tempel permanen. Buat ulang manual kalau dicurigai bocor.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="flex items-center justify-between flex-wrap gap-3">
                     <button type="button" @click="useMyLocation()" class="text-sm font-semibold text-primary flex items-center gap-1.5"><i data-lucide="locate-fixed" class="w-4 h-4"></i> Gunakan lokasi saya sekarang</button>
                     <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
@@ -452,6 +513,15 @@
                 </div>
                 <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Simpan Lokasi</button>
             </form>
+
+            @if(($settings['qr_absensi_mode'] ?? 'harian') === 'tetap')
+            <form method="POST" action="{{ route('setting.qrTokenTetap.regenerate') }}" onsubmit="return confirmAction(this, 'Buat ulang token QR tetap? QR lama yang sudah ditempel tidak akan berlaku lagi — Anda perlu mencetak & menempel QR baru.', 'orange')" class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                @csrf
+                <button class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Buat Ulang QR Tetap
+                </button>
+            </form>
+            @endif
         </div>
     </div>
 
