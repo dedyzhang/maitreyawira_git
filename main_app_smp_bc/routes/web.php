@@ -8,6 +8,7 @@ use App\Http\Controllers\AiAnalyzeController;
 use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\AiRagController;
 use App\Http\Controllers\AiTeacherController;
+use App\Http\Controllers\CanvaConnectController;
 use App\Http\Controllers\PresentationStudioController;
 use App\Http\Controllers\AlumniController;
 use App\Http\Controllers\AppDownloadController;
@@ -38,7 +39,6 @@ use App\Http\Controllers\RapatController;
 use App\Http\Controllers\RekapController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SiswaController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\WalikelasController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CetakController;
@@ -162,7 +162,7 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
 
     // ─── Asisten Guru (Fase 3) ─────────────────────────────────────────────────
     // Panel tool guru (soal/rangkum/feedback). Guru mapel, wali kelas, Kepala, semua Waka, admin.
-    Route::middleware(['role:guru,walikelas,kepala,kurikulum,kesiswaan,sapras,admin', 'modul:asisten_guru'])->prefix('ai/teacher')->name('ai.teacher.')->group(function () {
+    Route::middleware(['role:guru,walikelas,kepala,kurikulum,kesiswaan,sarpras,admin', 'modul:asisten_guru'])->prefix('ai/teacher')->name('ai.teacher.')->group(function () {
         Route::controller(AiTeacherController::class)->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/quota', 'quota')->name('quota');
@@ -194,6 +194,22 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
             Route::get('/{presentation}', 'show')->name('show');
             Route::put('/{presentation}', 'update')->name('update');
             Route::delete('/{presentation}', 'destroy')->name('destroy');
+        });
+
+        Route::controller(CanvaConnectController::class)->prefix('canva')->name('canva.')->group(function () {
+            Route::get('/status', 'status')->name('status');
+            Route::put('/belajar-id', 'updateBelajarId')->middleware('throttle:20,1')->name('belajar-id');
+            Route::get('/connect', 'connect')->middleware('throttle:10,1')->name('connect');
+            Route::get('/callback', 'callback')->name('callback');
+            Route::delete('/disconnect', 'disconnect')->middleware('throttle:20,1')->name('disconnect');
+            Route::get('/designs', 'designs')->middleware('throttle:20,1')->name('designs');
+        });
+
+        Route::controller(CanvaConnectController::class)->prefix('presentasi')->name('presentasi.canva.')->group(function () {
+            Route::post('/{presentation}/canva', 'createDesign')->middleware('throttle:20,1')->name('create');
+            Route::post('/{presentation}/canva/refresh-url', 'refreshUrl')->middleware('throttle:20,1')->name('refresh');
+            Route::post('/{presentation}/canva/export', 'exportPdf')->middleware('throttle:10,1')->name('export');
+            Route::get('/{presentation}/canva/download', 'downloadExport')->name('download');
         });
     });
 
@@ -512,6 +528,14 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::post('/mode', 'mode')->name('mode');
     });
 
+    // ─── Presensi Saya (guru): riwayat sendiri + form keterlambatan + izin pulang awal (guard di controller) ───
+    Route::middleware('modul:absensi')->prefix('presensi-guru')->name('presensi-guru.')->controller(PresensiGuruController::class)->group(function () {
+        Route::get('/saya', 'self')->name('self');
+        Route::post('/saya/keterlambatan', 'keterlambatanStore')->middleware('throttle:10,1')->name('keterlambatan.store');
+        Route::post('/saya/izin-pulang', 'izinPulangStore')->middleware('throttle:10,1')->name('izinPulang.store');
+        Route::post('/saya/izin-pulang-qr', [QrAbsensiController::class, 'izinPulangMark'])->middleware('throttle:10,1')->name('izinPulang.qrStore');
+    });
+
     // ─── 7 KAIH (siswa isi harian sebelum absen; rekap walikelas/admin; soal admin/kurikulum) ───
     Route::middleware('modul:absensi')->prefix('kaih')->name('kaih.')->controller(KaihController::class)->group(function () {
         Route::get('/isi', 'isi')->name('isi');
@@ -672,6 +696,13 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::post('/absensi', [AbsensiController::class, 'store'])->name('absensi.store');
         Route::get('/absensi/rekap', [AbsensiController::class, 'rekap'])->name('absensi.rekap');
         Route::get('/absensi/rekap/cetak', [AbsensiController::class, 'cetakRekap'])->name('absensi.rekap.cetak');
+
+        // Registrasi wajah siswa: admin (semua kelas) + wali kelas (kelasnya saja) — guard
+        // peran ditangani langsung di AbsensiController::wajah()/SiswaController::bisaKelolaWajah(),
+        // sama pola dgn absensi.index di atas. JANGAN pasang middleware permission: di sini.
+        Route::get('/absensi/wajah', [AbsensiController::class, 'wajah'])->name('absensi.wajah');
+        Route::post('/siswa/{uuid}/wajah', [SiswaController::class, 'storeFace'])->name('siswa.face.store');
+        Route::delete('/siswa/{uuid}/wajah', [SiswaController::class, 'destroyFace'])->name('siswa.face.destroy');
     });
 
     // ─── Wali Kelas: data siswa kelasnya, reset password, set sekretaris — guard peran
@@ -790,16 +821,16 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
     });
 
     Route::middleware(['permission:manage_absensi', 'modul:absensi'])->group(function () {
-        // Absensi wajah (face recognition)
-        Route::get('/absensi/wajah', [AbsensiController::class, 'wajah'])->name('absensi.wajah');
+        // Absensi wajah guru (registrasi wajah siswa dipindah ke grup modul:absensi di atas
+        // supaya wali kelas juga bisa akses, scoped ke kelasnya)
         Route::get('/absensi/wajah-guru', [AbsensiController::class, 'wajahGuru'])->name('absensi.wajah-guru');
-        Route::post('/siswa/{uuid}/wajah', [SiswaController::class, 'storeFace'])->name('siswa.face.store');
-        Route::delete('/siswa/{uuid}/wajah', [SiswaController::class, 'destroyFace'])->name('siswa.face.destroy');
 
         // Presensi Guru (koreksi manual + rekap — TIDAK termasuk scan/mark, lihat grup kiosk publik di atas)
         Route::get('/presensi-guru', [PresensiGuruController::class, 'index'])->name('presensi-guru.index');
         Route::post('/presensi-guru', [PresensiGuruController::class, 'store'])->name('presensi-guru.store');
         Route::get('/presensi-guru/rekap', [PresensiGuruController::class, 'rekap'])->name('presensi-guru.rekap');
+        Route::get('/presensi-guru/jam-pulang', [PresensiGuruController::class, 'jamPulang'])->name('presensi-guru.jamPulang.index');
+        Route::post('/presensi-guru/jam-pulang', [PresensiGuruController::class, 'jamPulangUpdate'])->name('presensi-guru.jamPulang.update');
         Route::post('/guru/{uuid}/wajah', [GuruController::class, 'storeFace'])->name('guru.face.store');
         Route::delete('/guru/{uuid}/wajah', [GuruController::class, 'destroyFace'])->name('guru.face.destroy');
         Route::get('/wajah-galeri', [FaceController::class, 'gallery'])->name('wajah.galeri');

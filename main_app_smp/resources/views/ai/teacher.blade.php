@@ -2,7 +2,26 @@
 @section('title', 'Asisten Guru')
 
 @section('content')
-<div class="space-y-5 relative" x-data="teacherAi()">
+<style>
+    /* Generator Soal — hasil dokumen responsif di HP landscape/WebView */
+    .ai-teacher-hasil .quiz-preview-scroll,
+    .ai-teacher-hasil .ai-answer {
+        -webkit-overflow-scrolling: touch;
+        min-height: 0;
+    }
+    @media (orientation: landscape) and (max-height: 560px) and (max-width: 900px) {
+        .ai-teacher-hasil {
+            max-height: min(72vh, 640px);
+            min-height: 0;
+        }
+        .ai-teacher-hasil .quiz-preview-scroll,
+        .ai-teacher-hasil .ai-answer,
+        .ai-teacher-hasil textarea.form-input {
+            min-height: 0;
+        }
+    }
+</style>
+<div class="space-y-5 relative min-w-0 max-w-full" x-data="teacherAi()">
 
     {{-- Gate: wajib API key Gemini pribadi --}}
     <template x-if="needsApiKeySetup">
@@ -44,7 +63,7 @@
         </div>
     </template>
 
-    <div :class="needsApiKeySetup ? 'pointer-events-none select-none opacity-40 blur-[1px]' : ''">
+    <div class="space-y-5" :class="needsApiKeySetup ? 'pointer-events-none select-none opacity-40 blur-[1px]' : ''">
     {{-- Header --}}
     <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -109,6 +128,93 @@
         </div>
     </div>
     @endif
+
+    {{-- Canva Pendidikan (belajar.id, gratis) --}}
+    <div class="card p-4 space-y-3" x-show="!needsApiKeySetup && canva.feature_enabled" x-cloak>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0 flex-1">
+                <h2 class="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                    <span class="grid place-items-center w-8 h-8 rounded-xl bg-sky-500/15 text-sky-600">
+                        <i data-lucide="palette" class="w-4 h-4"></i>
+                    </span>
+                    Canva Pendidikan
+                </h2>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Hubungkan dengan akun <strong>belajar.id</strong> sekolah. Gratis, tanpa Canva Pro.
+                    <span x-show="canva.connected" x-cloak>
+                        Terhubung: <span class="font-semibold font-mono" x-text="canva.email_masked"></span>
+                    </span>
+                </p>
+                <div class="mt-3 flex flex-col sm:flex-row gap-2" x-show="!canva.connected" x-cloak>
+                    <input type="email" x-model="belajarIdInput" placeholder="nama@sekolah.belajar.id"
+                           class="form-input text-sm font-mono flex-1 min-w-0"
+                           :disabled="canvaBusy">
+                    <button type="button" @click="saveBelajarId" :disabled="canvaBusy || !(belajarIdInput || '').trim()"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-bold min-h-[44px] disabled:opacity-40">
+                        Simpan email
+                    </button>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1" x-show="!canva.connected && canva.belajar_hint" x-cloak>
+                    Siap hubungkan: <span class="font-mono font-semibold" x-text="canva.belajar_hint"></span>
+                </p>
+                <p class="text-[11px] text-rose-500 font-semibold mt-1" x-show="canvaError" x-cloak x-text="canvaError"></p>
+                <p class="text-[11px] text-emerald-600 font-semibold mt-1" x-show="canvaMessage" x-cloak x-text="canvaMessage"></p>
+            </div>
+            <div class="flex flex-wrap gap-2 flex-shrink-0">
+                <a href="{{ route('ai.teacher.presentasi.index') }}"
+                   class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-2.5 text-sm font-bold min-h-[44px] hover:border-primary">
+                    <i data-lucide="presentation" class="w-4 h-4"></i> Studio Presentasi
+                </a>
+                <a x-show="!canva.connected" x-cloak href="{{ route('ai.teacher.canva.connect') }}"
+                   class="inline-flex items-center gap-2 rounded-xl bg-sky-600 text-white px-4 py-2.5 text-sm font-bold min-h-[44px] hover:bg-sky-700"
+                   :class="(!canva.configured || !canva.belajar_hint) && 'opacity-50 pointer-events-none'">
+                    <i data-lucide="link" class="w-4 h-4"></i> Hubungkan Canva
+                </a>
+                <button x-show="canva.connected" x-cloak type="button" @click="disconnectCanva" :disabled="canvaBusy"
+                        class="inline-flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800 px-4 py-2.5 text-sm font-bold text-rose-600 min-h-[44px] disabled:opacity-50">
+                    <i data-lucide="unlink" class="w-4 h-4"></i> Putuskan
+                </button>
+            </div>
+        </div>
+        <p class="text-[11px] text-amber-700 dark:text-amber-300" x-show="!canva.configured" x-cloak>
+            Admin belum mengisi <code>CANVA_CLIENT_ID</code> / <code>CANVA_CLIENT_SECRET</code> di server.
+        </p>
+    </div>
+
+    {{-- Alur mengajar: soal → Arena / Presentasi / Canva --}}
+    <div class="card p-4 space-y-3" x-show="!needsApiKeySetup" x-cloak>
+        <div>
+            <h2 class="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                <span class="grid place-items-center w-8 h-8 rounded-xl bg-primary/10 text-primary">
+                    <i data-lucide="route" class="w-4 h-4"></i>
+                </span>
+                Alur mengajar
+            </h2>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Buat soal di Generator Soal, lalu lanjut ke Arena (kuis/misi), Studio Presentasi, atau Canva.
+            </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" @click="tab = 'quiz'"
+                    class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-bold min-h-[40px] hover:border-primary">
+                <i data-lucide="file-question" class="w-3.5 h-3.5"></i> Generator Soal
+            </button>
+            @if($arenaBelajarAktif ?? false)
+            <a href="{{ route('classroom.index') }}"
+               class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-bold min-h-[40px] hover:border-primary">
+                <i data-lucide="gamepad-2" class="w-3.5 h-3.5"></i> Arena Belajar
+            </a>
+            @endif
+            <a href="{{ route('ai.teacher.presentasi.index') }}"
+               class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-bold min-h-[40px] hover:border-primary">
+                <i data-lucide="presentation" class="w-3.5 h-3.5"></i> Studio Presentasi
+            </a>
+            <span x-show="canva.feature_enabled" x-cloak
+                  class="inline-flex items-center gap-2 rounded-xl border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 px-3 py-2 text-xs font-bold min-h-[40px]">
+                <i data-lucide="palette" class="w-3.5 h-3.5"></i> Canva (panel di atas)
+            </span>
+        </div>
+    </div>
 
     {{-- Generate quota --}}
     <div class="card p-4" x-show="quota" x-cloak>
@@ -217,7 +323,9 @@
                             : (m.previewHtml
                                 ? 'w-full max-w-3xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-primary/15 rounded-bl-md overflow-auto shadow-sm'
                                 : 'max-w-[92%] sm:max-w-[80%] bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-primary/15 rounded-bl-md shadow-sm')">
-                        <div x-show="m.role === 'assistant' && m.previewHtml" x-cloak class="overflow-auto" x-html="m.previewHtml"></div>
+                        <div x-show="m.role === 'assistant' && m.previewHtml" x-cloak
+                             class="min-w-0 max-w-full overflow-x-auto overflow-y-auto overscroll-contain"
+                             x-html="m.previewHtml"></div>
                         <div x-show="m.role === 'assistant' && !m.previewHtml" class="ai-answer break-words whitespace-pre-wrap" x-text="m.text"></div>
                         <div x-show="m.role === 'user'" class="whitespace-pre-wrap" x-text="m.text"></div>
                         <div x-show="m.role === 'assistant'" class="mt-2.5 flex flex-wrap gap-2 border-t border-primary/10 pt-2">
@@ -282,10 +390,10 @@
         </form>
     </div>
 
-    <div class="grid gap-5 xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(240px,0.55fr)]"
+    <div class="grid gap-5 min-w-0 xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(240px,0.55fr)]"
          x-show="isToolTab" x-cloak>
         {{-- Form --}}
-        <div class="card p-5">
+        <div class="card p-5 min-w-0">
             {{-- Generator Soal --}}
             <div x-show="tab === 'quiz'" class="space-y-4">
                 <div>
@@ -355,6 +463,14 @@
                         </select>
                     </div>
                 </div>
+                <label class="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition"
+                       :class="quiz.soal_bergambar ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-700'">
+                    <input type="checkbox" x-model="quiz.soal_bergambar" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary">
+                    <span>
+                        <span class="block text-sm font-semibold text-slate-700 dark:text-slate-200">Soal bergambar (Gemini Image)</span>
+                        <span class="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">AI menambahkan diagram/ilustrasi pada soal. Memakai kuota Gemini Image terpisah (maks. {{ (int) config('ai.image.max_per_quiz', 5) }} gambar/batch).</span>
+                    </span>
+                </label>
                 <button type="button" @click="submit('quiz')" :disabled="loading || quiz.jenis_soal.length === 0 || (quiz.source === 'file' ? !quiz.file : quiz.topik.trim() === '')" class="btn-primary w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40">
                     <i data-lucide="wand-2" class="w-4 h-4"></i> Buat Soal
                 </button>
@@ -448,10 +564,10 @@
         </div>
 
         {{-- Hasil --}}
-        <div class="card p-5 flex flex-col min-h-[300px]">
-            <div class="flex items-center justify-between gap-3 mb-3">
-                <h2 class="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> Hasil</h2>
-                <div x-show="result" x-cloak class="flex flex-wrap items-center justify-end gap-2">
+        <div class="ai-teacher-hasil card p-4 sm:p-5 flex flex-col min-h-[300px] min-w-0 max-w-full overflow-x-clip">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
+                <h2 class="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2 shrink-0"><i data-lucide="file-text" class="w-4 h-4"></i> Hasil</h2>
+                <div x-show="result" x-cloak class="flex flex-wrap items-center gap-1.5 sm:justify-end min-w-0">
                     <button type="button" @click="toggleEdit()" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-primary dark:text-slate-300 dark:hover:bg-slate-800">
                         <i :data-lucide="editing ? 'check' : 'pencil'" class="w-4 h-4"></i><span x-text="editing ? 'Selesai' : 'Edit'"></span>
                     </button>
@@ -528,39 +644,14 @@
             <textarea x-show="result && !loading && editing" x-cloak x-model="result" rows="16" class="form-input flex-1 min-h-[260px] resize-y text-sm leading-relaxed"></textarea>
 
             {{-- Pratinjau dokumen berformat (soal / RPM): sama persis dengan hasil export --}}
-            <div x-show="result && !loading && !editing && previewHtml" x-cloak class="flex-1 overflow-auto" x-html="previewHtml"></div>
+            <div x-show="result && !loading && !editing && previewHtml" x-cloak
+                 class="quiz-preview-scroll flex-1 min-w-0 max-w-full overflow-x-auto overflow-y-auto overscroll-contain"
+                 x-html="previewHtml"></div>
 
             {{-- Teks biasa: tab lain, atau bila pratinjau gagal/konten tak berformat RPM --}}
-            <div x-show="result && !loading && !editing && !previewHtml" x-cloak class="ai-answer flex-1 overflow-auto break-words text-sm text-slate-800 dark:text-slate-100" x-html="renderAiMarkdown(result)"></div>
-
-            {{-- Modal pilih ruang kelas untuk Arena --}}
-            <div x-show="showArenaModal" x-cloak class="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4" @keydown.escape.window="showArenaModal = false">
-                <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-xl ring-1 ring-slate-200 dark:ring-slate-700 p-5 space-y-4" @click.outside="showArenaModal = false">
-                    <div>
-                        <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                            <i data-lucide="gamepad-2" class="w-5 h-5 text-primary"></i>
-                            Kirim ke Arena Belajar
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-1">Pilih ruang kelas. Soal akan diimpor ke form buat kuis.</p>
-                    </div>
-                    <div>
-                        <label class="form-label">Ruang kelas</label>
-                        <select x-model="arenaClassroomId" class="form-input">
-                            <option value="">— pilih —</option>
-                            <template x-for="c in arenaClassrooms" :key="c.uuid">
-                                <option :value="c.uuid" x-text="c.title"></option>
-                            </template>
-                        </select>
-                    </div>
-                    <div class="flex justify-end gap-2">
-                        <button type="button" class="btn-secondary px-3 py-2 rounded-xl text-sm" @click="showArenaModal = false">Batal</button>
-                        <button type="button" class="btn-primary px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
-                                :disabled="!arenaClassroomId || sendingArena" @click="sendToArena()">
-                            Buka form Arena
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <div x-show="result && !loading && !editing && !previewHtml" x-cloak
+                 class="ai-answer flex-1 min-w-0 max-w-full overflow-x-auto overflow-y-auto break-words text-sm text-slate-800 dark:text-slate-100"
+                 x-html="renderAiMarkdown(result)"></div>
         </div>
 
         {{-- History generate: collapse + drag-resize supaya tidak mendominasi layar --}}
@@ -638,6 +729,35 @@
         </div>
     </div>
     </div>{{-- /blur wrapper --}}
+
+    {{-- Modal Arena di luar card Hasil agar fixed tidak ter-clip overflow --}}
+    <div x-show="showArenaModal" x-cloak class="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4" @keydown.escape.window="showArenaModal = false">
+        <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-xl ring-1 ring-slate-200 dark:ring-slate-700 p-5 space-y-4" @click.outside="showArenaModal = false">
+            <div>
+                <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <i data-lucide="gamepad-2" class="w-5 h-5 text-primary"></i>
+                    Kirim ke Arena Belajar
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">Pilih ruang kelas. Soal akan diimpor ke form buat kuis.</p>
+            </div>
+            <div>
+                <label class="form-label">Ruang kelas</label>
+                <select x-model="arenaClassroomId" class="form-input">
+                    <option value="">— pilih —</option>
+                    <template x-for="c in arenaClassrooms" :key="c.uuid">
+                        <option :value="c.uuid" x-text="c.title"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="btn-secondary px-3 py-2 rounded-xl text-sm" @click="showArenaModal = false">Batal</button>
+                <button type="button" class="btn-primary px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
+                        :disabled="!arenaClassroomId || sendingArena" @click="sendToArena()">
+                    Buka form Arena
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @include('partials.ai-markdown')
@@ -671,6 +791,20 @@
                 has_gemini_api_key: @js((bool) ($externalAccounts['has_gemini_api_key'] ?? false)),
                 gemini_api_key_masked: @js($externalAccounts['gemini_api_key_masked'] ?? null),
             },
+            canva: @js($canvaStatus ?? [
+                'configured' => false,
+                'feature_enabled' => true,
+                'connected' => false,
+                'email_masked' => null,
+                'display_name' => null,
+                'allowed_email_suffix' => '.belajar.id',
+                'belajar_hint' => null,
+                'connected_at' => null,
+            ]),
+            canvaBusy: false,
+            canvaError: '',
+            canvaMessage: '',
+            belajarIdInput: @js(($canvaStatus['belajar_hint'] ?? null) ?: ''),
             apiKeyInput: '',
             apiKeySaving: false,
             apiKeyError: '',
@@ -710,7 +844,7 @@
                 { value: 'mencocokkan', label: 'Mencocokkan' },
                 { value: 'isian', label: 'Isian' },
             ],
-            quiz:     { topik: '', jumlah: 5, jenis_soal: ['pg'], tingkat: 'sedang', jenjang: '', source: 'ai', file: null, fileName: '' },
+            quiz:     { topik: '', jumlah: 5, jenis_soal: ['pg'], tingkat: 'sedang', jenjang: '', source: 'ai', file: null, fileName: '', soal_bergambar: false },
             learning: { tool: 'rpp', topik: '', mapel: '', jenjang: '', durasi: '', source: 'ai', file: null, fileName: '' },
             summary:  { materi: '' },
             feedback: { nama: '', konteks: '' },
@@ -729,6 +863,9 @@
                 learningWord: '{{ route('ai.teacher.learning.export-word') }}',
                 learningPdf: '{{ route('ai.teacher.learning.export-pdf') }}',
                 geminiKey: '{{ route('ai.teacher.gemini-key') }}',
+                canvaStatus: '{{ route('ai.teacher.canva.status') }}',
+                canvaDisconnect: '{{ route('ai.teacher.canva.disconnect') }}',
+                canvaBelajarId: '{{ route('ai.teacher.canva.belajar-id') }}',
                 externalPrompt: '{{ route('ai.teacher.external-prompt') }}',
                 externalResult: '{{ route('ai.teacher.external-result') }}',
                 chat: '{{ route('ai.teacher.chat') }}',
@@ -997,6 +1134,68 @@
                 }
             },
 
+            async saveBelajarId() {
+                if (this.canvaBusy) return;
+                this.canvaBusy = true;
+                this.canvaError = '';
+                this.canvaMessage = '';
+                try {
+                    const r = await fetch(this.urls.canvaBelajarId, {
+                        method: 'PUT',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        body: JSON.stringify({ canva_belajar_id: (this.belajarIdInput || '').trim() }),
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok || !d.ok) {
+                        this.canvaError = d.message || (d.errors?.canva_belajar_id?.[0]) || 'Email belajar.id ditolak.';
+                        return;
+                    }
+                    this.canva = Object.assign({}, this.canva, d.canva || {});
+                    this.belajarIdInput = this.canva.belajar_hint || this.belajarIdInput;
+                    this.canvaMessage = d.message || 'Email belajar.id disimpan.';
+                    this.$nextTick(() => window.lucide && lucide.createIcons());
+                } catch (_) {
+                    this.canvaError = 'Gagal menyimpan email.';
+                } finally {
+                    this.canvaBusy = false;
+                }
+            },
+
+            async disconnectCanva() {
+                if (this.canvaBusy) return;
+                if (!confirm('Putuskan tautan Canva Pendidikan dari akun SIMS?')) return;
+                this.canvaBusy = true;
+                this.canvaError = '';
+                this.canvaMessage = '';
+                try {
+                    const r = await fetch(this.urls.canvaDisconnect, {
+                        method: 'DELETE',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok || !d.ok) {
+                        this.canvaError = d.message || 'Gagal memutus Canva.';
+                        return;
+                    }
+                    this.canva = Object.assign({}, this.canva, d.canva || { connected: false, email_masked: null });
+                    this.canvaMessage = d.message || 'Tautan Canva diputus.';
+                    this.$nextTick(() => window.lucide && lucide.createIcons());
+                } catch (_) {
+                    this.canvaError = 'Gagal terhubung.';
+                } finally {
+                    this.canvaBusy = false;
+                }
+            },
+
             startQuotaPolling() {
                 if (this.quotaTimer) clearInterval(this.quotaTimer);
                 this.quotaTimer = setInterval(() => this.refreshQuota(false), 10000);
@@ -1084,6 +1283,7 @@
                     this.quiz.jenis_soal.forEach((jenis) => form.append('jenis_soal[]', jenis));
                     form.append('tingkat', this.quiz.tingkat);
                     form.append('jenjang', this.quiz.jenjang || '');
+                    form.append('soal_bergambar', this.quiz.soal_bergambar ? '1' : '0');
                     if (this.quiz.source === 'file' && this.quiz.file) form.append('file', this.quiz.file);
                 }
 
@@ -1120,6 +1320,7 @@
                     if (r.ok && d.ok) {
                         this.result = d.answer;
                         if (d.history) this.addHistory(d.history);
+                        if (d.warning) this.error = d.warning;
                         if (tool === 'learning' || tool === 'quiz') await this.refreshPreview();
                         await this.refreshQuota(true);
                     } else if (r.status === 422) {
@@ -1197,6 +1398,7 @@
                     this.quiz.jenis_soal.forEach((jenis) => form.append('jenis_soal[]', jenis));
                     form.append('tingkat', this.quiz.tingkat);
                     form.append('jenjang', this.quiz.jenjang || '');
+                    form.append('soal_bergambar', this.quiz.soal_bergambar ? '1' : '0');
                     if (this.quiz.source === 'file' && this.quiz.file) form.append('file', this.quiz.file);
                 }
 
