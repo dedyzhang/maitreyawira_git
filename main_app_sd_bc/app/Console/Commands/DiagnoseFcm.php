@@ -53,24 +53,16 @@ class DiagnoseFcm extends Command
 
         $this->newLine();
         $this->info('=== 2. Token perangkat tersimpan ===');
-        $tokenModel = null;
-        foreach (['App\\Models\\UserFcmToken', 'App\\Models\\FcmToken', 'App\\Models\\DeviceToken'] as $candidate) {
-            if (class_exists($candidate)) {
-                $tokenModel = $candidate;
-                break;
-            }
-        }
-        if (!$tokenModel) {
-            $this->warn('⚠ Tidak ketemu model token FCM standar (UserFcmToken/FcmToken/DeviceToken) di app ini — dilewati. Cek manual tabel mana yang menyimpan token FCM di app ini kalau mau tahu jumlahnya.');
-        } else {
-            $total = $tokenModel::count();
-            $this->line("Model dipakai: {$tokenModel}");
+        try {
+            $total = \App\Models\UserFcmToken::count();
             $this->line("Total token FCM tersimpan di DB: {$total}");
             if ($total === 0) {
                 $this->error('❌ Tidak ada token sama sekali → tidak ada perangkat yang dikirimi apa pun, walau kredensialnya benar. Kemungkinan APK di hosting ini gagal daftar token, atau memang belum ada user yang login dari APK di instance ini.');
             } else {
-                $this->info("✔ Ada token ({$total} buah tersimpan).");
+                $this->info("✔ Ada {$total} token tersimpan.");
             }
+        } catch (Throwable $e) {
+            $this->warn('⚠ Gagal cek jumlah token (' . $e->getMessage() . ') — dilewati, lanjut ke step berikutnya.');
         }
 
         $this->newLine();
