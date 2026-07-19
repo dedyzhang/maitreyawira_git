@@ -426,6 +426,21 @@
                 // ModulAktif: on/off per sekolah dari Pengaturan → Fitur (default aktif).
                 $modulOn = fn (string $kode) => \App\Support\ModulAktif::aktif($kode);
                 $groups = [];
+
+                // ── Absensi Saya (self-service: absen QR + presensi guru pribadi) ──
+                if ($modulOn('absensi')) {
+                    $absensiSayaItems = [];
+                    if (auth()->user()?->siswa || auth()->user()?->guru) {
+                        $absensiSayaItems[] = ['absen.qr', ['absen.qr'], 'qr-code', 'Absen QR'];
+                    }
+                    if (auth()->user()?->guru) {
+                        $absensiSayaItems[] = ['presensi-guru.self', ['presensi-guru.self'], 'clock', 'Presensi Saya'];
+                    }
+                    if (!empty($absensiSayaItems)) {
+                        $groups['absensi_saya'] = ['Absensi Saya', 'qr-code', $absensiSayaItems];
+                    }
+                }
+
                 if ($isAdmin || auth()->user()?->canAccess('manage_users')) {
                     $masterItems = [];
                     if ($isAdmin || auth()->user()?->canAccess('manage_users')) {
@@ -508,7 +523,7 @@
                 }
 
                 // Asisten Guru: guru mapel, wali kelas, Kepala Sekolah, semua Waka, admin — bukan siswa/orang tua
-                if ($modulOn('asisten_guru') && in_array($access, ['guru', 'walikelas', 'kepala', 'kurikulum', 'kesiswaan', 'sapras', 'admin'], true)) {
+                if ($modulOn('asisten_guru') && \App\Support\UserRole::matches($access, 'guru', 'walikelas', 'kepala', 'kurikulum', 'kesiswaan', 'sarpras', 'sapras', 'admin')) {
                     $akademik[] = ['ai.teacher.index', ['ai.teacher.*'], 'sparkles', 'Asisten Guru'];
                 }
 
@@ -651,7 +666,7 @@
 
                 // ── Keuangan ──
                 if ($modulOn('keuangan') && ($isAdmin || auth()->user()?->canAccess('manage_keuangan'))) {
-                    $groups['keuangan'] = ['Keuangan', 'wallet', [
+                    $groups['keuangan'] = ['Keuangan / SPP', 'wallet', [
                         ['keuangan.index',      ['keuangan.index','keuangan.kelas'], 'layout-dashboard', 'Pembayaran SPP'],
                         ['keuangan.verifikasi', ['keuangan.verifikasi'],             'badge-check',      'Verifikasi'],
                         ['keuangan.bank',       ['keuangan.bank'],                   'landmark',         'Bank & Metode'],
@@ -708,12 +723,6 @@
                 <i data-lucide="layout-dashboard" class="nav-icon w-[18px] h-[18px] flex-shrink-0"></i>
                 <span x-show="!mini" class="text-sm truncate">Dashboard</span>
             </a>
-            @if($modulOn('absensi') && (auth()->user()?->siswa || auth()->user()?->guru))
-            <a href="{{ route('absen.qr') }}" data-tip="Absen QR" class="nav-link flex items-center px-3 py-2.5 {{ request()->routeIs('absen.qr') ? 'active' : '' }}" :class="mini ? 'justify-center' : 'gap-3'">
-                <i data-lucide="qr-code" class="nav-icon w-[18px] h-[18px] flex-shrink-0"></i>
-                <span x-show="!mini" class="text-sm truncate">Absen QR</span>
-            </a>
-            @endif
             @if($modulOn('kartu_pelajar') && auth()->user()?->siswa)
             <a href="{{ route('kartu-pelajar.self') }}" data-tip="Kartu Pelajar" class="nav-link flex items-center px-3 py-2.5 {{ request()->routeIs('kartu-pelajar.self') ? 'active' : '' }}" :class="mini ? 'justify-center' : 'gap-3'">
                 <i data-lucide="id-card" class="nav-icon w-[18px] h-[18px] flex-shrink-0"></i>
@@ -1584,16 +1593,88 @@
     // Pola fetch()+CSRF SAMA seperti simpan tata letak dashboard — tanpa mekanisme baru.
     window.registerFcmToken = function(token, deviceType) {
         if (!token) return;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta || !meta.content) return;
+        if (window.__mwFcmRegisterInFlight) return;
+        window.__mwFcmRegisterInFlight = true;
         fetch('{{ route('notifications.fcmToken.store') }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'X-CSRF-TOKEN': meta.content,
                 'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
             },
+            credentials: 'same-origin',
             body: JSON.stringify({ token: token, device_type: deviceType || 'android' }),
-        }).catch(e => console.error('registerFcmToken gagal:', e));
+        }).then(function (r) {
+            return r.text().then(function (text) {
+                window.__mwFcmRegisterInFlight = false;
+                var j = null;
+                try { j = text ? JSON.parse(text) : null; } catch (eParse) {}
+                if (r.ok && j && j.ok === true) {
+                    if (window.AndroidFcm && typeof AndroidFcm.onTokenRegistered === 'function') {
+                        AndroidFcm.onTokenRegistered();
+                    }
+                } else if (window.AndroidFcm && typeof AndroidFcm.onRegisterResult === 'function') {
+                    AndroidFcm.onRegisterResult(0, r.status, (text || '').substring(0, 120));
+                }
+            });
+        }).catch(function (e) {
+            window.__mwFcmRegisterInFlight = false;
+            console.error('registerFcmToken gagal:', e);
+        });
     };
+    // WebView Android: setelah login, minta token dari native lalu simpan ke user_fcm_tokens
+    // untuk user yang sedang login (termasuk saat ganti akun).
+    (function syncAndroidFcmToken() {
+        function run() {
+            if (!window.AndroidFcm || typeof AndroidFcm.getToken !== 'function') return;
+            var token = '';
+            try { token = AndroidFcm.getToken() || ''; } catch (e) { return; }
+            if (token) window.registerFcmToken(token, 'android');
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', run);
+        } else {
+            run();
+        }
+        setTimeout(run, 1500);
+        setTimeout(run, 4000);
+        // Saat logout, bersihkan flag di Android + hapus baris token user ini.
+        document.querySelectorAll('form[action*="logout"]').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                var token = '';
+                try {
+                    if (window.AndroidFcm && typeof AndroidFcm.getToken === 'function') {
+                        token = AndroidFcm.getToken() || '';
+                    }
+                } catch (e) {}
+                var meta = document.querySelector('meta[name="csrf-token"]');
+                if (token && meta && meta.content) {
+                    try {
+                        fetch('{{ route('notifications.fcmToken.destroy') }}', {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': meta.content,
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ token: token }),
+                            keepalive: true,
+                        });
+                    } catch (e2) {}
+                }
+                try {
+                    if (window.AndroidFcm && typeof AndroidFcm.onLoggedOut === 'function') {
+                        AndroidFcm.onLoggedOut();
+                    }
+                } catch (e3) {}
+            });
+        });
+    })();
     jconfirm.defaults = { theme:'material', animation:'scale', closeIcon:true, backgroundDismiss:true, useBootstrap:false, boxWidth:'420px' };
     window.confirmDelete = function(form){ $.confirm({ title:'Hapus data ini?', content:'Tindakan ini permanen dan tidak dapat dibatalkan.', type:'red', icon:'', buttons:{ hapus:{ text:'Ya, Hapus', btnClass:'btn-red', keys:['enter'], action:function(){ form.submit(); } }, batal:{ text:'Batal' } } }); return false; };
     window.confirmAction = function(form, msg, color){ $.confirm({ title:'Konfirmasi', content: msg || 'Lanjutkan?', type: color || 'orange', buttons:{ ya:{ text:'Ya, Lanjutkan', btnClass:'btn-blue', keys:['enter'], action:function(){ form.submit(); } }, batal:{ text:'Batal' } } }); return false; };
