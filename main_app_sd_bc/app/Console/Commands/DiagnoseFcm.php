@@ -69,8 +69,7 @@ class DiagnoseFcm extends Command
             if ($total === 0) {
                 $this->error('❌ Tidak ada token sama sekali → tidak ada perangkat yang dikirimi apa pun, walau kredensialnya benar. Kemungkinan APK di hosting ini gagal daftar token, atau memang belum ada user yang login dari APK di instance ini.');
             } else {
-                $recent = $tokenModel::orderByDesc('id')->first();
-                $this->info("✔ Ada token. Total: {$total}");
+                $this->info("✔ Ada token ({$total} buah tersimpan).");
             }
         }
 
