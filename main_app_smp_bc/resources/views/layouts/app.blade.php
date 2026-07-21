@@ -570,13 +570,16 @@
                 }
 
                 // ── Kedisiplinan ──
+                // $bolehKelolaDisiplin/$bolehLihatDisiplin/$disiplinItems didefinisikan DI LUAR gate
+                // modulOn('disiplin') karena Pemanggilan Ortu/Siswa (di bawah) memakainya independen
+                // dari modul disiplin — kalau di dalam gate, saat modul off variabelnya undefined
+                // dan bikin seluruh layout (dipakai di semua halaman) crash.
                 $jenisAturan = \App\Models\Setting::get('jenis_aturan', 'p3');
+                $bolehKelolaDisiplin = $isAdmin || auth()->user()?->canAccess('manage_disiplin');
+                $bolehAjukanDisiplin = auth()->user()?->guru || (auth()->user()?->siswa && \App\Models\Sekretaris::where('id_siswa', auth()->user()->siswa->uuid)->exists());
+                $bolehLihatDisiplin = auth()->user()?->siswa || $access === 'orangtua';
+                $disiplinItems = [];
                 if ($modulOn('disiplin')) {
-                    $bolehKelolaDisiplin = $isAdmin || auth()->user()?->canAccess('manage_disiplin');
-                    $bolehAjukanDisiplin = auth()->user()?->guru || (auth()->user()?->siswa && \App\Models\Sekretaris::where('id_siswa', auth()->user()->siswa->uuid)->exists());
-                    $bolehLihatDisiplin = auth()->user()?->siswa || $access === 'orangtua';
-
-                    $disiplinItems = [];
                     if ($jenisAturan === 'poin') {
                         if ($bolehKelolaDisiplin) {
                             $disiplinItems[] = ['poin.index', ['poin.index', 'poin.create', 'poin.edit'], 'list-checks', 'Master Aturan'];
@@ -714,7 +717,9 @@
                 if ($isAdmin || auth()->user()?->canAccess('manage_settings')) {
                     $groups['sistem'] = ['Sistem', 'sliders-horizontal', [
                         ['setting.index', ['setting.index', 'setting.kopRapor', 'setting.penjabaran', 'setting.tpRange'], 'settings-2', 'Pengaturan'],
-                        ['setting.roles', ['setting.roles'], 'shield-check', 'Hak Akses (RBAC)'],
+                        // Halaman ini juga memuat toggle Fitur Aktif (dipindah dari tab Pengaturan
+                        // supaya jadi satu tempat bersama pengaturan akses lain).
+                        ['setting.roles', ['setting.roles'], 'shield-check', 'Hak Akses & Fitur'],
                         ['pembaruan.index', ['pembaruan.*'], 'sparkles', 'Info Pembaruan'],
                     ]];
                     // Langganan (lisensi) — hanya superadmin
@@ -832,8 +837,9 @@
                     </span>
                 </button>
                 <div x-show="openGroup==='{{ $gk }}'" x-collapse class="nav-submenu ml-[22px] pl-2.5 mt-0.5 space-y-0.5">
-                    @foreach($gitems as [$iroute, $ipatterns, $iicon, $ilabel])
-                    <a href="{{ route($iroute) }}" class="nav-link nav-sublink flex items-center gap-2.5 px-3 py-2 {{ request()->routeIs(...$ipatterns) ? 'active' : '' }}">
+                    @foreach($gitems as $it)
+                    @php [$iroute, $ipatterns, $iicon, $ilabel] = $it; @endphp
+                    <a href="{{ route($iroute, $it[4] ?? []) }}" class="nav-link nav-sublink flex items-center gap-2.5 px-3 py-2 {{ request()->routeIs(...$ipatterns) ? 'active' : '' }}">
                         <i data-lucide="{{ $iicon }}" class="nav-icon w-4 h-4 flex-shrink-0"></i>
                         <span class="text-[13px] truncate">{{ $ilabel }}</span>
                     </a>
@@ -843,8 +849,9 @@
 
             {{-- Mode ringkas (icon-only): anak grup jadi ikon datar langsung --}}
             <div x-show="mini" x-cloak class="space-y-0.5 pt-1">
-                @foreach($gitems as [$iroute, $ipatterns, $iicon, $ilabel])
-                <a href="{{ route($iroute) }}" data-tip="{{ $ilabel }}" class="nav-link flex items-center justify-center px-3 py-2.5 {{ request()->routeIs(...$ipatterns) ? 'active' : '' }}">
+                @foreach($gitems as $it)
+                @php [$iroute, $ipatterns, $iicon, $ilabel] = $it; @endphp
+                <a href="{{ route($iroute, $it[4] ?? []) }}" data-tip="{{ $ilabel }}" class="nav-link flex items-center justify-center px-3 py-2.5 {{ request()->routeIs(...$ipatterns) ? 'active' : '' }}">
                     <i data-lucide="{{ $iicon }}" class="nav-icon w-[18px] h-[18px] flex-shrink-0"></i>
                 </a>
                 @endforeach
