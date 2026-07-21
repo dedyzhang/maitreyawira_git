@@ -418,6 +418,7 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
             Route::get('/{classroom}/arena-belajar/{quiz}/edit', [GameQuizController::class, 'edit'])->name('arena.edit');
             Route::post('/{classroom}/arena-belajar/{quiz}/update', [GameQuizController::class, 'update'])->middleware('throttle:30,1')->name('arena.update');
             Route::post('/{classroom}/arena-belajar/{quiz}/terbit', [GameQuizController::class, 'publish'])->name('arena.publish');
+            Route::post('/{classroom}/arena-belajar/{quiz}/salin', [GameQuizController::class, 'copyToClassrooms'])->middleware('throttle:20,1')->name('arena.copy');
             Route::delete('/{classroom}/arena-belajar/{quiz}', [GameQuizController::class, 'destroy'])->name('arena.destroy');
             Route::get('/{classroom}/arena-belajar/{quiz}/hasil', [GameQuizController::class, 'results'])->name('arena.results');
             Route::post('/{classroom}/arena-belajar/{quiz}/transfer-nilai', [GameQuizController::class, 'transferGrades'])->name('arena.transfer');
@@ -710,6 +711,13 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::get('/absensi/wajah', [AbsensiController::class, 'wajah'])->name('absensi.wajah');
         Route::post('/siswa/{uuid}/wajah', [SiswaController::class, 'storeFace'])->name('siswa.face.store');
         Route::delete('/siswa/{uuid}/wajah', [SiswaController::class, 'destroyFace'])->name('siswa.face.destroy');
+
+        // Validasi Wajah: admin (semua data) + wali kelas (kelasnya saja) — guard & scoping
+        // ditangani di FaceController::accessScope(), sama pola dgn di atas. JANGAN pasang
+        // middleware permission: di sini.
+        Route::get('/wajah-galeri', [FaceController::class, 'gallery'])->name('wajah.galeri');
+        Route::get('/wajah-ganda', [FaceController::class, 'duplicates'])->name('wajah.ganda');
+        Route::get('/wajah-tak-terbaca', [FaceController::class, 'unreadable'])->name('wajah.takTerbaca');
     });
 
     // ─── Wali Kelas: data siswa kelasnya, reset password, set sekretaris — guard peran
@@ -842,8 +850,6 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::post('/presensi-guru/jam-pulang', [PresensiGuruController::class, 'jamPulangUpdate'])->name('presensi-guru.jamPulang.update');
         Route::post('/guru/{uuid}/wajah', [GuruController::class, 'storeFace'])->name('guru.face.store');
         Route::delete('/guru/{uuid}/wajah', [GuruController::class, 'destroyFace'])->name('guru.face.destroy');
-        Route::get('/wajah-galeri', [FaceController::class, 'gallery'])->name('wajah.galeri');
-        Route::get('/wajah-ganda', [FaceController::class, 'duplicates'])->name('wajah.ganda');
         Route::get('/qr-absensi/cetak', [QrAbsensiController::class, 'cetak'])->name('qr.cetak');
 
     });
