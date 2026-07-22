@@ -426,23 +426,17 @@ function faceScan(data, opts={}){
         status:'Menyiapkan kamera…',
         attendees: data.map(s=>({ ...s, marked: s.status==='hadir', justMarked:false, pulangMarked: !!s.pulangDone, jam_masuk: s.jam_masuk, jam_pulang: s.jam_pulang })),
         enrolled:[], stream:null, timer:null,
-        // ===== Ambang pencocokan =====
-        // Strategi: SKOR longgar + KONSISTENSI ketat. Riwayat kalibrasi:
-        // (1) ambang ketat → "susah terdeteksi"; (2) dilonggarkan + konfirmasi 1 frame →
-        // "mengabsenkan ORANG LAIN"; (3) semua dinaikkan → "susah terdeteksi" lagi.
-        // Pelajaran: pengaman salah-orang paling efektif adalah KONFIRMASI 2 FRAME pada orang
-        // yang sama (match salah tidak stabil antar frame, match benar stabil) + margin ke
-        // kandidat kedua — BUKAN ambang skor tinggi. Maka ambang skor dikembalikan ke level
-        // yang terbukti mudah mendeteksi, sementara confirmFrames:2 dipertahankan.
-        threshold:0.64,
+        // ===== Ambang pencocokan wajah: dikembalikan persis ke kalibrasi 21 Juli 2026 malam
+        //       (commit "Perbaikan Face Recognation dan validasi wajah") atas permintaan
+        //       eksplisit — jangan naik/turunkan lagi tanpa data diagnostik nyata. =====
+        threshold:0.66,        // skor robust minimum; jangan turunkan tanpa uji lapangan
         confidentThreshold:0.80,
-        supportThreshold:0.60,
+        supportThreshold:0.62, // minimal 2 sampel orang yang sama harus cukup mirip
         minSampleSupport:2,
-        singleSampleTop1:0.70, // 1 sampel cukup bila top1 sangat yakin
-        margin:0.06,           // jarak minimal ke kandidat kedua — nama mirip tidak boleh menang tipis
-        minFaceFrac:0.12,      // wajah boleh sedikit lebih jauh dari kamera (dulu 0.14)
-        minFaceScore:0.55,
-        confirmFrames:2,       // JANGAN turunkan ke 1 — ini penahan utama "salah orang"
+        margin:0.08,           // kandidat terbaik harus unggul jelas dari kandidat kedua
+        minFaceFrac:0.14,      // wajah harus cukup besar di frame agar embedding stabil
+        minFaceScore:0.55,     // buang deteksi ragu/blur/pencahayaan buruk
+        confirmFrames:2,       // wajib stabil beberapa frame beruntun sebelum absen ditandai
         _streak:{},
         _faceLocked:{},
         _scanPauseUntil:0,
@@ -564,7 +558,6 @@ function faceScan(data, opts={}){
         hasEnoughSampleAgreement(match){
             if(!match) return false;
             if((match.sampleCount || 0) <= 1) return match.top1 >= this.threshold;
-            if(match.top1 >= this.singleSampleTop1) return true;
             return match.support >= this.minSampleSupport || match.top1 >= this.confidentThreshold;
         },
 
@@ -949,8 +942,9 @@ function faceScan(data, opts={}){
                         label='Perjelas wajah'; color='#f59e0b';
                     } else if(top1Val >= 0.45){
                         // Skor sedang (0.45–0.62) — kemungkinan besar orang yg SAMA tapi sudut/
-                        // cahaya kurang pas, atau pakai kacamata/masker, BUKAN "tidak dikenali".
-                        label='Lepas kacamata/masker, hadap lurus'; color='#f59e0b';
+                        // cahaya kurang pas, BUKAN "tidak dikenali sama sekali". Dulu kasus ini
+                        // ikut jatuh ke '—' polos, tak beda dgn wajah yg benar2 tak dikenal.
+                        label='Coba lagi, hadap lurus'; color='#f59e0b';
                     } else {
                         label='—'; color='#94a3b8';
                     }
