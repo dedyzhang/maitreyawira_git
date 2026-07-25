@@ -169,6 +169,7 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::controller(AiTeacherController::class)->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/quota', 'quota')->name('quota');
+            Route::get('/materials', 'materials')->middleware('throttle:60,1')->name('materials');
             Route::put('/gemini-key', 'updateGeminiKey')->middleware('throttle:20,1')->name('gemini-key');
             Route::post('/gemini-key', 'updateGeminiKey')->middleware('throttle:20,1');
             Route::delete('/gemini-key', 'destroyGeminiKey')->middleware('throttle:20,1')->name('gemini-key.destroy');
@@ -176,6 +177,7 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
             Route::post('/external-result', 'externalResult')->middleware('throttle:30,1')->name('external-result');
             Route::post('/chat', 'chat')->middleware('throttle:30,1')->name('chat');
             Route::post('/presentasi-from-chat', 'presentasiFromChat')->middleware('throttle:20,1')->name('presentasi-from-chat');
+            Route::post('/ocr', 'ocr')->middleware('throttle:20,1')->name('ocr');
             Route::post('/quiz', 'quiz')->name('quiz');
             Route::post('/quiz/preview', 'previewQuiz')->name('quiz.preview');
             Route::post('/quiz/export-word', 'exportQuizWord')->name('quiz.export-word');
@@ -544,7 +546,7 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::post('/mode', 'mode')->name('mode');
     });
 
-    // ─── Presensi Saya (guru): riwayat sendiri + form keterlambatan + izin pulang awal (guard di controller) ───
+    // ─── Absensi (guru): riwayat sendiri + form keterlambatan + izin pulang awal (guard di controller) ───
     Route::middleware('modul:absensi')->prefix('presensi-guru')->name('presensi-guru.')->controller(PresensiGuruController::class)->group(function () {
         Route::get('/saya', 'self')->name('self');
         Route::post('/saya/keterlambatan', 'keterlambatanStore')->middleware('throttle:10,1')->name('keterlambatan.store');

@@ -9,6 +9,9 @@ use App\Models\Setting;
 use App\Models\TeacherPresentation;
 use App\Services\GameQuizImporter;
 use App\Services\GeminiService;
+use App\Services\TeacherMaterialException;
+use App\Services\TeacherMaterialService;
+use App\Support\DocumentText;
 use App\Support\LearningDocument;
 use App\Support\LearningDocxBuilder;
 use App\Support\ModulAktif;
@@ -24,12 +27,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Smalot\PdfParser\Parser as PdfParser;
 use ZipArchive;
 
 /*
 | Asisten Guru (FASE 3). Panel berisi 3 tool untuk mempercepat pekerjaan guru:
-| Generator Soal, Perangkum Materi, dan Draft Feedback. Semua memanggil Gemini
+| Generator Soal, Perangkum Materi, dan Catatan Siswa. Semua memanggil Gemini
 | lewat GeminiService; rate limit + audit via trait InteractsWithAi. Digate
 | role:guru,walikelas di route.
 */
@@ -51,7 +53,10 @@ class AiTeacherController extends Controller
         'campuran' => ['pg_kompleks', 'pg', 'benar_salah', 'mencocokkan', 'isian'],
     ];
 
-    public function __construct(private GeminiService $gemini) {}
+    public function __construct(
+        private GeminiService $gemini,
+        private TeacherMaterialService $materials,
+    ) {}
 
     /** GET /ai/teacher - halaman panel Asisten Guru. */
     public function index(): View
@@ -86,18 +91,31 @@ class AiTeacherController extends Controller
 
         return view('ai.teacher', [
             'histories' => $histories,
-            'quotaUsage' => $this->aiPublicQuotaUsage(true),
+            'quotaUsage' => $this->aiPublicQuotaUsage(true, $user->uuid),
             'canViewQuotaUsage' => false,
             'arenaClassrooms' => $arenaClassrooms,
             'arenaBelajarAktif' => ModulAktif::aktif('arena_belajar'),
             'launcherAktif' => (Setting::get('tp_launcher_aktif', '1') ?? '1') === '1',
             'needsApiKeySetup' => ! $hasApiKey,
             'canvaStatus' => $canvaStatus,
+            'teacherMaterials' => $this->materials->listPayloads($user->uuid),
             'externalAccounts' => [
                 'has_gemini_api_key' => $hasApiKey,
                 'gemini_api_key_masked' => $user->geminiApiKeyMasked(),
                 'canva_belajar_id' => $user->canva_belajar_id,
             ],
+        ]);
+    }
+
+    /**
+     * GET /ai/teacher/materials — daftar buku/materi unggahan guru (Generator Soal RAG).
+     * Dipakai UI untuk pilih ulang tanpa upload, dan polling status pending/partial.
+     */
+    public function materials(Request $request): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'materials' => $this->materials->listPayloads($request->user()->uuid),
         ]);
     }
 
@@ -121,6 +139,14 @@ class AiTeacherController extends Controller
 
         if ($built instanceof JsonResponse) {
             return $built;
+        }
+
+        // Cadangan Gemini web tidak bisa unggah foto otomatis dari SIMS.
+        if (! empty($built['vision_images'])) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Foto buku hanya digenerate di SIMS lewat API AI Studio (tombol Buat Soal / Buat RPM). Cadangan Gemini web tidak mendukung lampiran foto otomatis.',
+            ], 422);
         }
 
         return response()->json([
@@ -147,7 +173,7 @@ class AiTeacherController extends Controller
             'quiz' => ['type' => 'quiz', 'type_label' => 'Generator Soal'],
             'learning' => ['type' => 'rpp', 'type_label' => 'RPM Learning'],
             'summary' => ['type' => 'summary', 'type_label' => 'Perangkum Materi'],
-            'feedback' => ['type' => 'feedback', 'type_label' => 'Draft Feedback'],
+            'feedback' => ['type' => 'feedback', 'type_label' => 'Catatan Siswa'],
             'chat' => ['type' => 'gemini_chat', 'type_label' => 'Nalar Guru'],
         };
 
@@ -572,10 +598,143 @@ class AiTeacherController extends Controller
     public function quota(Request $request): JsonResponse
     {
         $fresh = $request->boolean('fresh');
+        $userId = $request->user()?->uuid;
 
         return response()->json([
             'ok' => true,
-            'quota' => $this->aiPublicQuotaUsage($fresh),
+            'quota' => $this->aiPublicQuotaUsage($fresh, $userId),
+        ]);
+    }
+
+    /**
+     * POST /ai/teacher/ocr — foto buku (kamera HP) → teks via Gemini vision.
+     * Foto tidak disimpan permanen; hanya dikirim ke model lalu dibuang.
+     */
+    public function ocr(Request $request): JsonResponse
+    {
+        if ($blocked = $this->requireTeacherReady($request)) {
+            return $blocked;
+        }
+
+        $maxImages = max(1, (int) config('ai.ocr.max_images', 3));
+        $maxKb = max(256, (int) ceil(((int) config('ai.ocr.max_bytes', 4 * 1024 * 1024)) / 1024));
+
+        $request->validate([
+            'images' => ['required', 'array', 'min:1', 'max:'.$maxImages],
+            // image = cek isi biner (bukan hanya ekstensi); mimes membatasi format OCR.
+            'images.*' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:'.$maxKb],
+            'scope' => ['nullable', 'in:quiz,learning'],
+            'title' => ['nullable', 'string', 'max:180'],
+        ], [
+            'images.required' => 'Unggah minimal satu foto halaman buku.',
+            'images.max' => "Maksimal {$maxImages} foto per sekali baca.",
+            'images.*.image' => 'File harus berupa gambar yang valid.',
+            'images.*.mimes' => 'Format foto harus JPEG, PNG, atau WebP.',
+            'images.*.max' => 'Setiap foto maksimal '.round($maxKb / 1024, 1).' MB. Kompres di HP lalu coba lagi.',
+        ]);
+
+        $user = $request->user();
+        $userId = $user->uuid;
+        $apiKey = $user->plainGeminiApiKey();
+
+        if ($limited = $this->aiRateLimited('teacher_ocr', $userId)) {
+            return $limited;
+        }
+
+        $prepared = [];
+        foreach ($request->file('images', []) as $file) {
+            $binary = $this->prepareOcrImageBinary($file->getRealPath(), $file->getMimeType() ?: 'image/jpeg');
+            if ($binary === null) {
+                continue;
+            }
+            $prepared[] = $binary;
+        }
+
+        if ($prepared === []) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Foto tidak bisa diproses. Ambil ulang dengan format JPEG/PNG.',
+            ], 422);
+        }
+
+        try {
+            $result = $this->gemini->visionText($prepared, [
+                'api_key' => $apiKey,
+                'timeout' => (int) config('ai.ocr.timeout', 60),
+                'max_output_tokens' => 4096,
+            ]);
+        } catch (RuntimeException $e) {
+            $this->logAiUsage($userId, 'teacher_ocr', config('ai.model'), 0, 0, 'error');
+
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage(),
+                'quota' => $this->aiPublicQuotaUsage(false, $userId),
+            ], 502);
+        }
+
+        $this->logAiUsage(
+            $userId,
+            'teacher_ocr',
+            $result['model'] ?? config('ai.model'),
+            $result['prompt_tokens'] ?? 0,
+            $result['completion_tokens'] ?? 0,
+            'success',
+        );
+
+        $text = trim((string) ($result['text'] ?? ''));
+        $upper = mb_strtoupper($text);
+        if ($text === '' || str_contains($upper, 'TIDAK_TERBACA')) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'image_unreadable',
+                'message' => 'Teks tidak terbaca dari foto (mungkin buram atau gelap). Potret ulang halaman dengan cahaya cukup dan fokus tajam.',
+                'quota' => $this->aiPublicQuotaUsage(false, $userId),
+            ], 422);
+        }
+
+        $maxChars = max(4000, (int) config('ai.max_input_chars', 8000) * 2);
+        // Sisakan ruang untuk kop + stempel sumber (anti-plagiarisme).
+        $stampBudget = 900;
+        $bodyMax = max(2000, $maxChars - $stampBudget);
+        if (mb_strlen($text) > $bodyMax) {
+            $text = mb_substr($text, 0, $bodyMax);
+        }
+
+        $scope = $request->input('scope', 'quiz') === 'learning' ? 'learning' : 'quiz';
+        $pageCount = count($prepared);
+        $customTitle = trim((string) $request->input('title', ''));
+        $title = $customTitle !== ''
+            ? $customTitle
+            : ('Teks scan buku · '.now()->timezone(config('app.timezone', 'Asia/Jakarta'))->format('d/m/Y H:i')
+                .($pageCount > 1 ? " · {$pageCount} halaman" : ''));
+
+        // Kop sekolah + stempel sumber digital (trademark / pertanggungjawaban).
+        $text = SchoolLetterhead::ensureOcrAttribution($text, [
+            'pages' => $pageCount,
+        ]);
+
+        // Simpan ke History Generate agar bisa dipakai ulang (tanpa menyimpan file foto).
+        $history = $this->storeHistory($userId, [
+            'type' => 'ocr_scan',
+            'type_label' => 'Scan Buku',
+            'title' => $title,
+            'metadata' => [
+                'source' => 'camera_ocr',
+                'scope' => $scope,
+                'char_count' => mb_strlen($text),
+                'pages' => $pageCount,
+                'attribution' => 'school_letterhead+scan_stamp',
+                'via' => 'sims',
+            ],
+        ], $text);
+
+        return response()->json([
+            'ok' => true,
+            'text' => $text,
+            'char_count' => mb_strlen($text),
+            'history' => $history,
+            'quota' => $this->aiPublicQuotaUsage(false, $userId),
         ]);
     }
 
@@ -614,15 +773,30 @@ class AiTeacherController extends Controller
             return $limited;
         }
 
+        $maxOut = $this->quizMaxOutputTokens($jumlah, $tingkat);
+        $visionImages = $built['vision_images'] ?? [];
+
         try {
-            $result = $this->gemini->generate($built['prompt'], [
-                'system' => $built['system'],
-                'max_output_tokens' => $this->quizMaxOutputTokens($jumlah, $tingkat),
-                'api_key' => $apiKey,
-                'answer_style' => $built['answer_style'],
-                'thinking_level' => 'low',
-                'timeout' => (int) config('ai.long_timeout'),
-            ]);
+            // Foto buku: multimodal lewat key AI Studio pribadi guru (bukan OCR dulu).
+            if (is_array($visionImages) && $visionImages !== []) {
+                $result = $this->gemini->visionText($visionImages, [
+                    'api_key' => $apiKey,
+                    'prompt' => $built['prompt'],
+                    'system' => trim($built['system']."\n\n".$built['answer_style']),
+                    'max_output_tokens' => $maxOut,
+                    'temperature' => 0.4,
+                    'timeout' => (int) config('ai.long_timeout'),
+                ]);
+            } else {
+                $result = $this->gemini->generate($built['prompt'], [
+                    'system' => $built['system'],
+                    'max_output_tokens' => $maxOut,
+                    'api_key' => $apiKey,
+                    'answer_style' => $built['answer_style'],
+                    'thinking_level' => 'low',
+                    'timeout' => (int) config('ai.long_timeout'),
+                ]);
+            }
         } catch (RuntimeException $e) {
             $this->logAiUsage($userId, 'teacher_quiz', config('ai.model'), 0, 0, 'error');
 
@@ -756,9 +930,7 @@ class AiTeacherController extends Controller
             abort(500, 'Gagal membuat file Word.');
         }
 
-        return response()->download($path, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ])->deleteFileAfterSend(true);
+        return $this->attachmentDownload($path, $fileName, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
     /** POST /ai/teacher/quiz/export-pdf - export hasil soal ke PDF siap cetak. */
@@ -779,7 +951,11 @@ class AiTeacherController extends Controller
             'doc' => $doc,
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->download($fileName);
+        // Stream PDF dengan header attachment — andal di browser mobile & WebView DownloadManager.
+        return $pdf->download($fileName)->withHeaders($this->attachmentHeaders(
+            $fileName,
+            'application/pdf'
+        ));
     }
 
     /** POST /ai/teacher/learning - generator RPM Learning. */
@@ -792,6 +968,59 @@ class AiTeacherController extends Controller
 
         // Dokumen RPM utuh (+3 lampiran) butuh ~3.500 token dan ~45 detik.
         @set_time_limit((int) config('ai.long_timeout') + 60);
+
+        $visionImages = $built['vision_images'] ?? [];
+        if (is_array($visionImages) && $visionImages !== []) {
+            if ($blocked = $this->requireTeacherReady($request)) {
+                return $blocked;
+            }
+
+            $user = $request->user();
+            $userId = $user->uuid;
+            $apiKey = $user->plainGeminiApiKey();
+            $action = 'teacher_learning_'.$built['learning_tool'];
+
+            if ($limited = $this->aiRateLimited($action, $userId)) {
+                return $limited;
+            }
+
+            try {
+                $result = $this->gemini->visionText($visionImages, [
+                    'api_key' => $apiKey,
+                    'prompt' => $built['prompt'],
+                    'system' => trim($built['system']."\n\n".$built['answer_style']),
+                    'max_output_tokens' => 8192,
+                    'temperature' => 0.35,
+                    'timeout' => (int) config('ai.long_timeout'),
+                ]);
+            } catch (RuntimeException $e) {
+                $this->logAiUsage($userId, $action, config('ai.model'), 0, 0, 'error');
+
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                    'quota' => $this->aiPublicQuotaUsage(),
+                ], 502);
+            }
+
+            $answer = SchoolLetterhead::ensurePrefix($result['text']);
+            $this->logAiUsage(
+                $userId,
+                $action,
+                $result['model'] ?? config('ai.model'),
+                $result['prompt_tokens'] ?? 0,
+                $result['completion_tokens'] ?? 0,
+                'success',
+            );
+            $history = $this->storeHistory($userId, $built['history'], $answer);
+
+            return response()->json([
+                'ok' => true,
+                'answer' => $answer,
+                'history' => $history,
+                'quota' => $this->aiPublicQuotaUsage(),
+            ]);
+        }
 
         return $this->respond(
             $request,
@@ -851,9 +1080,7 @@ class AiTeacherController extends Controller
             abort(500, 'Gagal membuat file Word.');
         }
 
-        return response()->download($path, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ])->deleteFileAfterSend(true);
+        return $this->attachmentDownload($path, $fileName, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
     /** POST /ai/teacher/learning/export-pdf - export hasil RPM Learning ke PDF. */
@@ -871,7 +1098,36 @@ class AiTeacherController extends Controller
             'doc' => $doc,
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->download($fileName);
+        return $pdf->download($fileName)->withHeaders($this->attachmentHeaders(
+            $fileName,
+            'application/pdf'
+        ));
+    }
+
+    /**
+     * Unduhan file attachment yang andal di Chrome mobile & Android WebView (DownloadManager).
+     * Header eksplisit Content-Disposition: attachment memicu setDownloadListener di APK.
+     */
+    private function attachmentDownload(string $path, string $fileName, string $contentType)
+    {
+        return response()->download($path, $fileName, $this->attachmentHeaders($fileName, $contentType))
+            ->deleteFileAfterSend(true);
+    }
+
+    /** @return array<string, string> */
+    private function attachmentHeaders(string $fileName, string $contentType): array
+    {
+        $ascii = preg_replace('/[^A-Za-z0-9._-]+/', '-', $fileName) ?: 'dokumen.bin';
+        $utf8 = rawurlencode($fileName);
+
+        return [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => 'attachment; filename="'.$ascii.'"; filename*=UTF-8\'\''.$utf8,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+            // Bantu beberapa WebView mengenali unduhan (bukan navigasi HTML).
+            'Content-Transfer-Encoding' => 'binary',
+        ];
     }
 
     /** POST /ai/teacher/summary - perangkum materi. */
@@ -893,7 +1149,7 @@ class AiTeacherController extends Controller
         );
     }
 
-    /** POST /ai/teacher/feedback - draft komentar/feedback siswa. */
+    /** POST /ai/teacher/feedback - Catatan Siswa (draf komentar hangat untuk siswa). */
     public function feedback(Request $request): JsonResponse
     {
         $built = $this->composeFeedback($request);
@@ -925,34 +1181,55 @@ class AiTeacherController extends Controller
         }
 
         $allowedQuizTypes = implode(',', array_keys(self::QUIZ_TYPES));
+        $maxMaterial = max(4000, (int) config('ai.max_input_chars', 8000) * 2);
         $data = $request->validate([
-            'topik' => ['nullable', 'required_without:file', 'string', 'max:500'],
+            // Topik kini SELALU wajib: dengan RAG, topik adalah kunci pencarian yang
+            // menentukan bagian buku mana yang dipakai. Tanpa topik tidak ada yang
+            // bisa dicari, dan kita kembali ke menebak dari halaman awal.
+            'topik' => ['required', 'string', 'max:500'],
             'jumlah' => ['required', 'integer', 'min:1', 'max:20'],
             'jenis_soal' => ['required', 'array', 'min:1', 'max:5'],
             'jenis_soal.*' => ['required', 'string', 'distinct', 'in:'.$allowedQuizTypes],
             'tingkat' => ['required', 'in:mudah,sedang,sulit'],
             'jenjang' => ['nullable', 'string', 'max:100'],
             'file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'document_uuid' => ['nullable', 'string', 'max:64'],
+            'material_text' => ['nullable', 'string', 'max:'.$maxMaterial],
             'soal_bergambar' => ['sometimes', 'boolean'],
         ]);
         $data['jenis_soal'] = array_values(array_unique($data['jenis_soal']));
         $data['soal_bergambar'] = $request->boolean('soal_bergambar');
 
-        $documentText = '';
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $documentText = $this->extractQuizDocumentText($file->getRealPath(), $file->getClientOriginalExtension());
+        $topik = trim((string) $data['topik']);
+        $user = $request->user();
 
-            if ($documentText === '') {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Teks tidak dapat diekstrak dari file. Pastikan PDF bukan hasil scan/gambar dan file Word berisi teks.',
-                ], 422);
+        // Materi: file kecil (inline) | file besar (RAG) | buku lama (document_uuid) | teks
+        // hasil OCR foto halaman buku (material_text, dari alur "Foto buku" spt di RPM Learning).
+        $document = null;
+        $inlineMaterial = '';
+        $materialSource = null;
+
+        try {
+            if ($request->hasFile('file')) {
+                [$inlineMaterial, $document] = $this->materials->resolveUpload($user, $request->file('file'));
+                $materialSource = 'file';
+            } elseif (! empty($data['document_uuid'])) {
+                $document = $this->materials->findOwned($user, (string) $data['document_uuid']);
+                $materialSource = 'file';
+            } elseif (trim((string) ($data['material_text'] ?? '')) !== '') {
+                $inlineMaterial = trim((string) $data['material_text']);
+                $materialSource = 'camera_ocr';
             }
+
+            $material = $inlineMaterial;
+            if ($material === '' && $document) {
+                $material = $this->materials->retrieveForTopic($document, $topik, $user->uuid);
+            }
+        } catch (TeacherMaterialException $e) {
+            return response()->json($e->toArray(), $e->httpStatus);
         }
 
         $jenis = $this->quizTypeSummary($data['jenis_soal']);
-        $topik = trim((string) ($data['topik'] ?? ''));
         $jenjang = ! empty($data['jenjang']) ? "untuk jenjang {$data['jenjang']}" : '';
         $formatInstruction = $this->quizFormatInstruction(
             (int) $data['jumlah'],
@@ -963,14 +1240,15 @@ class AiTeacherController extends Controller
             (bool) $data['soal_bergambar'],
         );
 
-        if ($documentText !== '') {
-            $maxChars = (int) config('ai.max_input_chars');
-            $material = mb_substr($documentText, 0, $maxChars);
-            $topicLine = $topik !== '' ? "Fokus topik: \"{$topik}\".\n" : '';
+        if ($material !== '') {
+            $label = $materialSource === 'camera_ocr' ? 'MATERI SCAN BUKU' : 'MATERI FILE';
+            $sumber = $materialSource === 'camera_ocr' ? 'scan/foto halaman buku' : 'file';
             $prompt = "Buat {$data['jumlah']} soal ({$jenis}) dengan tingkat kesulitan "
-                ."{$data['tingkat']} {$jenjang} berdasarkan materi dari file berikut.\n"
-                .$topicLine
-                ."MATERI FILE:\n{$material}\n\n"
+                ."{$data['tingkat']} {$jenjang} berdasarkan materi dari {$sumber} berikut.\n"
+                ."Fokus topik: \"{$topik}\".\n"
+                ."JANGAN keluar dari cakupan {$label}. Bila sebuah fakta tidak ada di "
+                ."dalamnya, jangan mengarang — susun soal dari bagian yang tersedia saja.\n\n"
+                ."{$label}:\n{$material}\n\n"
                 .$formatInstruction;
         } else {
             $prompt = "Buat {$data['jumlah']} soal ({$jenis}) dengan tingkat kesulitan "
@@ -978,7 +1256,7 @@ class AiTeacherController extends Controller
                 .$formatInstruction;
         }
 
-        $title = $topik !== '' ? $topik : 'Soal dari file '.$request->file('file')?->getClientOriginalName();
+        $title = $topik;
 
         return [
             'system' => (string) config('ai.teacher.quiz'),
@@ -996,7 +1274,9 @@ class AiTeacherController extends Controller
                     'tingkat' => $data['tingkat'],
                     'jenjang' => $data['jenjang'] ?? null,
                     'soal_bergambar' => (bool) $data['soal_bergambar'],
-                    'file' => $request->file('file')?->getClientOriginalName(),
+                    'file' => $request->file('file')?->getClientOriginalName() ?? $document?->title,
+                    'document_uuid' => $document?->uuid,
+                    'source' => $materialSource ?? 'topic',
                     'via' => 'sims',
                 ],
             ],
@@ -1008,19 +1288,23 @@ class AiTeacherController extends Controller
      */
     private function composeLearning(Request $request): array|JsonResponse
     {
+        $maxMaterial = max(4000, (int) config('ai.max_input_chars', 8000) * 2);
         $data = $request->validate([
             'tool' => ['required', 'in:rpp'],
-            'topik' => ['nullable', 'required_without:file', 'string', 'max:500'],
+            'topik' => ['nullable', 'required_without_all:file,material_text', 'string', 'max:500'],
             'mapel' => ['nullable', 'string', 'max:100'],
             'jenjang' => ['nullable', 'string', 'max:100'],
             'durasi' => ['nullable', 'string', 'max:100'],
             'file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'material_text' => ['nullable', 'string', 'max:'.$maxMaterial],
         ]);
 
         $documentText = '';
+        $materialSource = null;
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $documentText = $this->extractQuizDocumentText($file->getRealPath(), $file->getClientOriginalExtension(), true);
+            $materialSource = 'file';
 
             if ($documentText === '') {
                 return response()->json([
@@ -1028,28 +1312,48 @@ class AiTeacherController extends Controller
                     'message' => 'Teks tidak dapat diekstrak dari file. Pastikan PDF bukan hasil scan/gambar dan file Word berisi teks.',
                 ], 422);
             }
+        } elseif (trim((string) ($data['material_text'] ?? '')) !== '') {
+            $documentText = trim((string) $data['material_text']);
+            $materialSource = 'camera_ocr';
         }
 
         $toolLabel = $this->learningToolLabel($data['tool']);
         $topik = trim((string) ($data['topik'] ?? ''));
-        $title = $topik !== '' ? $topik : 'RPM dari file '.$request->file('file')?->getClientOriginalName();
+        $title = $topik !== ''
+            ? $topik
+            : ($materialSource === 'camera_ocr'
+                ? 'RPM dari foto buku'
+                : 'RPM dari file '.$request->file('file')?->getClientOriginalName());
         $details = array_filter([
             ! empty($data['mapel']) ? "Mata pelajaran: {$data['mapel']}" : null,
             ! empty($data['jenjang']) ? "Jenjang/kelas: {$data['jenjang']}" : null,
             ! empty($data['durasi']) ? "Alokasi waktu: {$data['durasi']}" : null,
         ]);
         $detailText = $details ? implode("\n", $details)."\n" : '';
+        $topicLine = $topik !== '' ? "Fokus/topik RPM: \"{$topik}\".\n" : '';
 
-        if ($documentText !== '') {
-            $maxChars = (int) config('ai.max_input_chars');
-            $material = mb_substr($documentText, 0, $maxChars);
-            $topicLine = $topik !== '' ? "Fokus/topik RPM: \"{$topik}\".\n" : '';
-            $prompt = "Buat {$toolLabel} siap pakai untuk guru berdasarkan materi dari file berikut.\n"
+        if ($materialSource === 'camera_photo') {
+            $pageCount = count($visionImages);
+            $prompt = "Baca materi dari foto halaman buku/materi ajar yang dilampirkan ({$pageCount} gambar). "
+                ."Buat {$toolLabel} siap pakai untuk guru HANYA berdasarkan isi yang terbaca di foto.\n"
                 .$topicLine
                 .$detailText
                 ."Gunakan Bahasa Indonesia baku, praktis, dan langsung bisa direview guru.\n"
-                ."JANGAN keluar dari cakupan MATERI FILE. Jika ada informasi yang belum ada di file, gunakan placeholder yang jelas, bukan mengarang.\n\n"
-                ."MATERI FILE:\n{$material}\n\n"
+                ."Jangan mengarang di luar materi di foto. Jika sebagian buram, pakai bagian yang jelas; jika perlu info yang tidak ada di foto, gunakan placeholder yang jelas.\n"
+                ."Jika seluruh foto tidak terbaca, tulis tepat: TIDAK_TERBACA.\n\n"
+                .$this->learningFormatInstruction($data['tool']);
+        } elseif ($documentText !== '') {
+            $maxChars = (int) config('ai.max_input_chars');
+            $material = mb_substr($documentText, 0, $maxChars);
+            $topicLine = $topik !== '' ? "Fokus/topik RPM: \"{$topik}\".\n" : '';
+            $label = $materialSource === 'camera_ocr' ? 'MATERI SCAN BUKU' : 'MATERI FILE';
+            $prompt = "Buat {$toolLabel} siap pakai untuk guru berdasarkan materi dari "
+                .($materialSource === 'camera_ocr' ? 'scan/foto buku' : 'file')." berikut.\n"
+                .$topicLine
+                .$detailText
+                ."Gunakan Bahasa Indonesia baku, praktis, dan langsung bisa direview guru.\n"
+                ."JANGAN keluar dari cakupan {$label}. Jika ada informasi yang belum ada di materi, gunakan placeholder yang jelas, bukan mengarang.\n\n"
+                ."{$label}:\n{$material}\n\n"
                 .$this->learningFormatInstruction($data['tool']);
         } else {
             $prompt = "Buat {$toolLabel} siap pakai untuk guru dengan topik: \"{$topik}\".\n"
@@ -1074,10 +1378,81 @@ class AiTeacherController extends Controller
                     'jenjang' => $data['jenjang'] ?? null,
                     'durasi' => $data['durasi'] ?? null,
                     'file' => $request->file('file')?->getClientOriginalName(),
+                    'source' => $materialSource ?? 'topic',
                     'via' => 'sims',
                 ],
             ],
         ];
+    }
+
+    /**
+     * Siapkan binary gambar untuk OCR: resize edge bila perlu, JPEG quality tinggi.
+     *
+     * @return array{binary:string,mime:string}|null
+     */
+    private function prepareOcrImageBinary(string $path, string $mime): ?array
+    {
+        if (! is_readable($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        $mime = strtolower($mime);
+        if ($mime === 'image/jpg') {
+            $mime = 'image/jpeg';
+        }
+
+        $maxEdge = max(800, (int) config('ai.ocr.max_edge', 1920));
+        $quality = max(80, min(95, (int) config('ai.ocr.jpeg_quality', 90)));
+
+        if (! function_exists('imagecreatefromstring')) {
+            return ['binary' => $raw, 'mime' => in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true) ? $mime : 'image/jpeg'];
+        }
+
+        $src = @imagecreatefromstring($raw);
+        if ($src === false) {
+            // Jangan kirim biner non-gambar ke provider eksternal.
+            return null;
+        }
+
+        $w = imagesx($src);
+        $h = imagesy($src);
+        if ($w < 1 || $h < 1) {
+            imagedestroy($src);
+
+            return null;
+        }
+
+        $scale = 1.0;
+        $long = max($w, $h);
+        if ($long > $maxEdge) {
+            $scale = $maxEdge / $long;
+        }
+
+        $nw = max(1, (int) round($w * $scale));
+        $nh = max(1, (int) round($h * $scale));
+
+        if ($scale < 1.0) {
+            $dst = imagecreatetruecolor($nw, $nh);
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+            imagedestroy($src);
+            $src = $dst;
+        }
+
+        ob_start();
+        imagejpeg($src, null, $quality);
+        $binary = ob_get_clean();
+        imagedestroy($src);
+
+        if ($binary === false || $binary === '') {
+            return ['binary' => $raw, 'mime' => 'image/jpeg'];
+        }
+
+        return ['binary' => $binary, 'mime' => 'image/jpeg'];
     }
 
     /**
@@ -1124,20 +1499,21 @@ class AiTeacherController extends Controller
 
         $nama = $data['nama'] ? "untuk siswa bernama {$data['nama']}" : '';
         $prompt = SchoolLetterhead::asPromptBlock()
-            ."\n\nSusun draf umpan balik {$nama} berdasarkan konteks berikut. "
-            ."Mulai jawaban dengan kop surat di atas, lalu judul DRAF UMPAN BALIK, lalu isi.\n\n"
+            ."\n\nSusun Catatan Siswa {$nama} berdasarkan konteks berikut. "
+            ."Tulis dengan nada hangat, membangun, dan mudah diterima siswa/orang tua. "
+            ."Mulai jawaban dengan kop surat di atas, lalu judul CATATAN SISWA, lalu isi.\n\n"
             .$data['konteks'];
-        $title = ! empty($data['nama']) ? 'Feedback untuk '.$data['nama'] : Str::limit($data['konteks'], 90);
+        $title = ! empty($data['nama']) ? 'Catatan untuk '.$data['nama'] : Str::limit($data['konteks'], 90);
 
         return [
             'system' => (string) config('ai.teacher.feedback'),
             'prompt' => $prompt,
             'answer_style' => SchoolLetterhead::asPromptBlock()
-                ."\nTulis teks polos. Mulai dengan kop, lalu DRAF UMPAN BALIK, lalu isi. Tanpa Markdown.",
+                ."\nTulis teks polos. Mulai dengan kop, lalu CATATAN SISWA, lalu isi. Tanpa Markdown.",
             'title' => $title,
             'history' => [
                 'type' => 'feedback',
-                'type_label' => 'Draft Feedback',
+                'type_label' => 'Catatan Siswa',
                 'title' => $title,
                 'metadata' => [
                     'nama' => $data['nama'] ?? null,
@@ -1592,73 +1968,8 @@ TXT;
 
     private function extractQuizDocumentText(string $path, string $extension, bool $preserveNewlines = false): string
     {
-        $extension = strtolower($extension);
-
-        try {
-            $text = match ($extension) {
-                'pdf' => (new PdfParser)->parseFile($path)->getText(),
-                'docx' => $this->extractDocxText($path),
-                'doc' => $this->extractLegacyDocText($path),
-                default => '',
-            };
-        } catch (\Throwable) {
-            return '';
-        }
-
-        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', ' ', (string) $text);
-
-        if ($preserveNewlines) {
-            $text = preg_replace("/[ \t]+/u", ' ', (string) $text);
-            $text = preg_replace("/\n{3,}/u", "\n\n", (string) $text);
-
-            return trim((string) $text);
-        }
-
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
-    }
-
-    private function extractDocxText(string $path): string
-    {
-        $zip = new ZipArchive;
-        if ($zip->open($path) !== true) {
-            return '';
-        }
-
-        $parts = ['word/document.xml'];
-        $text = '';
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = $zip->getNameIndex($i);
-            if (preg_match('#^word/(header|footer|footnotes|endnotes)\d*\.xml$#', $name)) {
-                $parts[] = $name;
-            }
-        }
-
-        foreach (array_unique($parts) as $part) {
-            $xml = $zip->getFromName($part);
-            if ($xml === false) {
-                continue;
-            }
-
-            $xml = preg_replace('/<w:(tab|br|cr)[^>]*\/>/i', ' ', $xml);
-            $xml = preg_replace('/<\/w:t>\s*<w:t[^>]*>/i', ' ', $xml);
-            $xml = preg_replace('/<\/w:p>/i', "\n", $xml);
-            $text .= ' '.html_entity_decode(strip_tags($xml), ENT_QUOTES | ENT_XML1, 'UTF-8');
-        }
-
-        $zip->close();
-
-        return $text;
-    }
-
-    private function extractLegacyDocText(string $path): string
-    {
-        $raw = (string) file_get_contents($path);
-        if ($raw === '') {
-            return '';
-        }
-
-        preg_match_all('/[\x20-\x7E]{3,}/', $raw, $matches);
-
-        return implode(' ', $matches[0] ?? []);
+        // Ekstraksi dipusatkan di DocumentText agar RagService (ingest RAG) membaca
+        // dokumen dengan cara yang persis sama seperti controller ini.
+        return DocumentText::extract($path, $extension, $preserveNewlines);
     }
 }

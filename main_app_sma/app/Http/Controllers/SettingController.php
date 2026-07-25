@@ -53,6 +53,7 @@ class SettingController extends Controller
 
         $settings = Setting::pluck('value', 'key');
         $aturans = Aturan::orderBy('kode')->get();
+        $modulFitur = ModulAktif::semua();
 
         // Dipakai kartu "Reset Verifikasi Wajah Massal" — hitung siapa yg akan terdampak SEBELUM
         // admin menekan tombol, supaya konfirmasi bukan cek buta.
@@ -61,7 +62,7 @@ class SettingController extends Controller
         $guruFaceTerdaftar = Guru::whereNotNull($faceDescCol)->count();
 
         return view('setting.index', compact(
-            'semester', 'semesterAktif', 'kelas', 'pelajarans', 'settings', 'aturans',
+            'semester', 'semesterAktif', 'kelas', 'pelajarans', 'settings', 'aturans', 'modulFitur',
             'siswaFaceTerdaftar', 'guruFaceTerdaftar'
         ));
     }
