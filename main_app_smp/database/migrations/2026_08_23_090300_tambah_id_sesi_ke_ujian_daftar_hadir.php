@@ -30,10 +30,12 @@ return new class extends Migration
         // Drop unique lama DULU (bukan di akhir) — backfill di bawah sengaja bisa
         // insert >1 baris utk (id_ruangan,id_siswa,tanggal) yg sama (duplikasi per
         // sesi), yg akan ditolak constraint lama kalau belum di-drop.
-        Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
-            $table->dropForeign(['id_ruangan']);
-            $table->dropForeign(['id_siswa']);
-        });
+        try {
+            Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
+                $table->dropForeign(['id_ruangan']);
+                $table->dropForeign(['id_siswa']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
             $table->dropUnique(['id_ruangan', 'id_siswa', 'tanggal']);
@@ -86,10 +88,12 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
-            $table->dropForeign(['id_ruangan']);
-            $table->dropForeign(['id_siswa']);
-        });
+        try {
+            Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
+                $table->dropForeign(['id_ruangan']);
+                $table->dropForeign(['id_siswa']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
             $table->dropUnique(['id_ruangan', 'id_siswa', 'id_sesi']);

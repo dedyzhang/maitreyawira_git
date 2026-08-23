@@ -21,9 +21,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('ujian_berita_acara', function (Blueprint $table) {
-            $table->dropForeign(['id_ruangan']);
-        });
+        try {
+            Schema::table('ujian_berita_acara', function (Blueprint $table) {
+                $table->dropForeign(['id_ruangan']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_berita_acara', function (Blueprint $table) {
             $table->dropUnique(['id_ruangan', 'tanggal']);
@@ -43,9 +45,11 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('ujian_berita_acara', function (Blueprint $table) {
-            $table->dropForeign(['id_ruangan']);
-        });
+        try {
+            Schema::table('ujian_berita_acara', function (Blueprint $table) {
+                $table->dropForeign(['id_ruangan']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_berita_acara', function (Blueprint $table) {
             $table->dropUnique(['id_ruangan', 'id_ujian', 'tanggal']);
