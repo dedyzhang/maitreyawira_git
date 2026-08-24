@@ -27,9 +27,11 @@ return new class extends Migration
             });
         } catch (\Exception $e) {}
 
-        Schema::table('ujian_berita_acara', function (Blueprint $table) {
-            $table->dropUnique(['id_ruangan', 'tanggal']);
-        });
+        try {
+            Schema::table('ujian_berita_acara', function (Blueprint $table) {
+                $table->dropUnique(['id_ruangan', 'tanggal']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_berita_acara', function (Blueprint $table) {
             $table->uuid('id_ujian')->nullable()->after('id_ruangan');
@@ -51,12 +53,14 @@ return new class extends Migration
             });
         } catch (\Exception $e) {}
 
-        Schema::table('ujian_berita_acara', function (Blueprint $table) {
-            $table->dropUnique(['id_ruangan', 'id_ujian', 'tanggal']);
-            $table->dropForeign(['id_ujian']);
-            $table->dropForeign(['id_guru_pengawas']);
-            $table->dropColumn(['id_ujian', 'id_guru_pengawas']);
-        });
+        try {
+            Schema::table('ujian_berita_acara', function (Blueprint $table) {
+                $table->dropUnique(['id_ruangan', 'id_ujian', 'tanggal']);
+                $table->dropForeign(['id_ujian']);
+                $table->dropForeign(['id_guru_pengawas']);
+                $table->dropColumn(['id_ujian', 'id_guru_pengawas']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_berita_acara', function (Blueprint $table) {
             $table->foreign('id_ruangan')->references('uuid')->on('ujian_ruangan')->cascadeOnDelete();

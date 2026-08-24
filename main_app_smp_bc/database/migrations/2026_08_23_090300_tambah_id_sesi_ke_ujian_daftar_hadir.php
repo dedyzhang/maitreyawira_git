@@ -37,9 +37,11 @@ return new class extends Migration
             });
         } catch (\Exception $e) {}
 
-        Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
-            $table->dropUnique(['id_ruangan', 'id_siswa', 'tanggal']);
-        });
+        try {
+            Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
+                $table->dropUnique(['id_ruangan', 'id_siswa', 'tanggal']);
+            });
+        } catch (\Exception $e) {}
 
         Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
             $table->foreign('id_ruangan')->references('uuid')->on('ujian_ruangan')->cascadeOnDelete();
@@ -95,11 +97,13 @@ return new class extends Migration
             });
         } catch (\Exception $e) {}
 
-        Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
-            $table->dropUnique(['id_ruangan', 'id_siswa', 'id_sesi']);
-            $table->dropForeign(['id_sesi']);
-            $table->dropColumn('id_sesi');
-        });
+        try {
+            Schema::table('ujian_daftar_hadir', function (Blueprint $table) {
+                $table->dropUnique(['id_ruangan', 'id_siswa', 'id_sesi']);
+                $table->dropForeign(['id_sesi']);
+                $table->dropColumn('id_sesi');
+            });
+        } catch (\Exception $e) {}
         // NOTE: baris duplikat hasil backfill (kalau ada) TIDAK di-dedupe otomatis di sini —
         // unique lama (id_ruangan,id_siswa,tanggal) akan GAGAL re-add kalau masih ada duplikat
         // sisa dari backfill. Perlu DELETE manual duplikat dulu kalau benar2 rollback.
