@@ -391,7 +391,11 @@ function arenaLive(cfg) {
             this.initFs();
             if (!this.tokenReady) return;
             this.poll();
-            this.timer = setInterval(() => this.poll(), this.pollMs);
+            // simsPollInterval (bukan setInterval polos): jeda polling saat tab disembunyikan
+            // (mis. guru pindah ke layar lain sebentar), langsung poll lagi begitu kembali
+            // terlihat — konsisten dgn pola polling lain di app ini, kurangi beban server
+            // dari tab yg dibiarkan terbuka di background.
+            this.timer = window.simsPollInterval(() => this.poll(), this.pollMs);
             this.countdownTimer = setInterval(() => this.tickCountdown(), 1000);
             this.$nextTick(() => window.lucide && lucide.createIcons());
         },
@@ -417,27 +421,26 @@ function arenaLive(cfg) {
         async poll() {
             if (!this.tokenReady) return;
             const seq = ++this.pollSeq;
-            const now = Date.now();
-            const wantBoard = !this.lastBoardFetch
-                || (now - this.lastBoardFetch) >= 12000
-                || ['standings', 'ended'].includes(this.session?.status);
+            // state DAN leaderboard di-fetch TERPISAH (dulu digabung lewat Promise.all — kalau
+            // salah satu gagal/timeout, KEDUANYA gagal serentak, termasuk state yg sebetulnya
+            // baik-baik saja). Di bawah beban tinggi (banyak siswa live sekaligus), endpoint
+            // yg paling gampang lambat itu leaderboard (lebih berat) — dulu itu bisa bikin
+            // update status/soal ikut macet, kelihatan seperti siswa "nyangkut" di layar lama.
+            // Sekarang: leaderboard best-effort, gangguannya TAK menghalangi update state.
             try {
-                const fetches = [
-                    fetch(this.stateUrl, { headers: { Accept: 'application/json' } }),
-                ];
-                if (wantBoard) {
-                    fetches.push(fetch(this.boardUrl, { headers: { Accept: 'application/json' } }));
-                }
-                const results = await Promise.all(fetches);
+                const sRes = await fetch(this.stateUrl, { headers: { Accept: 'application/json' } });
                 if (seq !== this.pollSeq) return;
-                const sRes = results[0];
                 if (sRes.status === 429) {
                     this.scheduleBackoff(15000);
                     return;
                 }
                 if (sRes.status === 403) {
                     const err = await sRes.json().catch(() => ({}));
-                    if (err.requires_token) this.tokenReady = false;
+                    // Token gate cuma dianggap final SEBELUM pernah dapat session sama sekali.
+                    // Kalau ini muncul di tengah main (session sudah pernah terisi), lebih
+                    // mungkin hiccup sesaat di server (mis. session driver) drpd token dicabut
+                    // beneran — jangan matikan polling permanen, coba lagi siklus berikutnya.
+                    if (err.requires_token && !this.session) this.tokenReady = false;
                     return;
                 }
                 const sData = await sRes.json();
@@ -455,22 +458,31 @@ function arenaLive(cfg) {
                     this.feedbackOk = null;
                     this.$nextTick(() => window.lucide && lucide.createIcons());
                 }
-                if (wantBoard && results[1]) {
-                    const bRes = results[1];
-                    if (bRes.status === 429) {
-                        this.scheduleBackoff(15000);
-                    } else if (bRes.ok) {
-                        const bData = await bRes.json();
-                        if (seq !== this.pollSeq) return;
-                        this.leaderboard = bData.leaderboard || [];
-                        this.me = bData.me;
-                        this.lastBoardFetch = now;
-                    }
-                }
                 if (this.pollBackoffMs > 0) this.pollBackoffMs = 0;
                 const focusRoot = document.getElementById('arena-focus-root');
                 if (focusRoot && this.session?.uuid) {
                     focusRoot.dataset.sessionId = this.session.uuid;
+                }
+            } catch (e) {
+                return; // state gagal — coba lagi siklus berikutnya, tapi tetap coba leaderboard di bawah.
+            }
+
+            const now = Date.now();
+            const wantBoard = !this.lastBoardFetch
+                || (now - this.lastBoardFetch) >= 12000
+                || ['standings', 'ended'].includes(this.session?.status);
+            if (!wantBoard) return;
+            try {
+                const bRes = await fetch(this.boardUrl, { headers: { Accept: 'application/json' } });
+                if (seq !== this.pollSeq) return;
+                if (bRes.status === 429) {
+                    this.scheduleBackoff(15000);
+                } else if (bRes.ok) {
+                    const bData = await bRes.json();
+                    if (seq !== this.pollSeq) return;
+                    this.leaderboard = bData.leaderboard || [];
+                    this.me = bData.me;
+                    this.lastBoardFetch = now;
                 }
             } catch (e) {}
         },
@@ -478,7 +490,7 @@ function arenaLive(cfg) {
             this.pollBackoffMs = ms;
             if (this.timer) clearInterval(this.timer);
             this.timer = setTimeout(() => {
-                this.timer = setInterval(() => this.poll(), this.pollMs);
+                this.timer = window.simsPollInterval(() => this.poll(), this.pollMs);
                 this.poll();
             }, ms);
         },

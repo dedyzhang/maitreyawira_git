@@ -59,6 +59,8 @@ use App\Http\Controllers\ForumController;
 use App\Http\Controllers\ForumReactionController;
 use App\Http\Controllers\GameAttemptController;
 use App\Http\Controllers\GameLiveController;
+use App\Http\Controllers\GamePracticeController;
+use App\Http\Controllers\GamePracticeJoinController;
 use App\Http\Controllers\GameQuizController;
 use App\Http\Controllers\GameTemplateController;
 use App\Http\Controllers\QuestionQualityCheckerController;
@@ -76,6 +78,11 @@ use App\Http\Controllers\Keuangan\BendaharaAiController;
 use App\Http\Controllers\Keuangan\KeuanganController;
 use App\Http\Controllers\Keuangan\RkasController;
 use App\Http\Controllers\Keuangan\TagihanController;
+use App\Http\Controllers\Osis\OsisDashboardController;
+use App\Http\Controllers\Osis\OsisPaslonController;
+use App\Http\Controllers\Osis\OsisPemilihanController;
+use App\Http\Controllers\Osis\OsisPemilihController;
+use App\Http\Controllers\Osis\OsisVoteController;
 use App\Http\Controllers\LanggananController;
 use App\Http\Controllers\BankSoalController;
 use App\Http\Controllers\UjianAnalisisController;
@@ -141,6 +148,35 @@ Route::middleware([EnsureKioskOrPermission::class, 'modul:absensi'])->group(func
     Route::post('/presensi-guru/cancel', [PresensiGuruController::class, 'cancel'])->name('presensi-guru.cancel');
     Route::get('/qr-absensi', [QrAbsensiController::class, 'show'])->name('qr.absensi');
 });
+
+// ─── Pemilihan OSIS: link publik via QR — TANPA login sama sekali. Token per-ORANG
+//     (beda dgn kiosk_token yg satu token dipakai bersama semua orang), jadi tidak
+//     lewat EnsureKioskOrPermission — validasi murni lookup token di controller,
+//     dibungkus DB::transaction()+lockForUpdate() saat submit (cegah race condition
+//     double-tap/2-tab, lihat OsisVoteController::store()). ───
+Route::middleware(['modul:osis'])->prefix('pemilihan-osis')->name('osis.publik.')->group(function () {
+    // Throttle DIGENEROSIKAN (bukan diketatkan) — banyak siswa scan nyaris bersamaan
+    // dari WiFi sekolah yg sama (berbagi 1 IP publik lewat NAT); guard anti-vote-ganda
+    // yg SESUNGGUHNYA ada di DB transaction+lock, BUKAN di throttle ini.
+    Route::get('/pilih/{token}', [OsisVoteController::class, 'show'])->name('show')->middleware('throttle:120,1');
+    Route::post('/pilih/{token}', [OsisVoteController::class, 'store'])->name('store')->middleware('throttle:60,1');
+});
+
+// ─── Arena Belajar "Latihan": link publik via QR/barcode — TANPA login, TANPA perlu jadi
+//     anggota kelas. Identitas TAMU murni guest_token per-orang lewat query string (?g=...),
+//     pola sama Pemilihan OSIS di atas (bukan cookie/session Laravel, tak pernah Auth::login()).
+//     Sisi guru (host, login) ada di grup 'classroom.arena.latihan.*' yg ter-nest di dalam
+//     grup auth (lihat GamePracticeController). ───
+Route::middleware(['modul:akademik', 'modul:arena_belajar'])
+    ->prefix('arena-latihan')->name('latihan.publik.')
+    ->where(['joinToken' => '[A-Za-z0-9]{6,8}'])
+    ->group(function () {
+        Route::get('/{joinToken}', [GamePracticeJoinController::class, 'show'])->name('show')->middleware('throttle:120,1');
+        Route::post('/{joinToken}/gabung', [GamePracticeJoinController::class, 'join'])->name('join')->middleware('throttle:60,1');
+        Route::get('/{joinToken}/state', [GamePracticeJoinController::class, 'state'])->name('state')->middleware('throttle:360,1');
+        Route::get('/{joinToken}/podium', [GamePracticeJoinController::class, 'leaderboard'])->name('board')->middleware('throttle:360,1');
+        Route::post('/{joinToken}/jawab', [GamePracticeJoinController::class, 'answer'])->name('answer')->middleware('throttle:60,1');
+    });
 
 // Halaman "Langganan berakhir" — PUBLIK (tanpa auth) supaya siapa pun yang terkunci
 // oleh middleware EnforceLangganan tetap bisa melihat penjelasannya.
@@ -520,6 +556,15 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
             Route::get('/{classroom}/arena-belajar/{quiz}/live/state', [GameLiveController::class, 'state'])->middleware('throttle:360,1')->name('arena.live.state');
             Route::get('/{classroom}/arena-belajar/{quiz}/live/podium', [GameLiveController::class, 'leaderboard'])->middleware('throttle:360,1')->name('arena.live.leaderboard');
             Route::post('/{classroom}/arena-belajar/{quiz}/live/jawab', [GameLiveController::class, 'answer'])->middleware('throttle:60,1')->name('arena.live.answer');
+            // Latihan: rehearsal sebelum live sungguhan — sisi GURU (login) di sini. Sisi TAMU
+            // (scan QR/barcode, tanpa login, tanpa perlu jadi anggota kelas) ada di grup publik
+            // terpisah dekat rute publik Pemilihan OSIS (lihat 'latihan.publik.*' di atas).
+            Route::get('/{classroom}/arena-belajar/{quiz}/latihan', [GamePracticeController::class, 'show'])->name('arena.latihan.show');
+            Route::post('/{classroom}/arena-belajar/{quiz}/latihan/mulai', [GamePracticeController::class, 'start'])->middleware('throttle:20,1')->name('arena.latihan.start');
+            Route::post('/{classroom}/arena-belajar/{quiz}/latihan/maju', [GamePracticeController::class, 'advance'])->middleware('throttle:60,1')->name('arena.latihan.advance');
+            Route::post('/{classroom}/arena-belajar/{quiz}/latihan/akhiri', [GamePracticeController::class, 'end'])->name('arena.latihan.end');
+            Route::get('/{classroom}/arena-belajar/{quiz}/latihan/state', [GamePracticeController::class, 'state'])->middleware('throttle:360,1')->name('arena.latihan.state');
+            Route::get('/{classroom}/arena-belajar/{quiz}/latihan/podium', [GamePracticeController::class, 'leaderboard'])->middleware('throttle:360,1')->name('arena.latihan.leaderboard');
             Route::post('/{classroom}/arena-belajar/{quiz}/template', [GameTemplateController::class, 'setTemplate'])->name('arena.template');
             Route::get('/{classroom}/arena-belajar/{quiz}/template/main', [GameTemplateController::class, 'playTemplate'])->name('arena.template.play');
             Route::get('/{classroom}/arena-belajar/{quiz}/tim', [GameTemplateController::class, 'teams'])->name('arena.teams');
@@ -1187,6 +1232,41 @@ Route::middleware(['auth', EnsureFaceRegistered::class])->group(function () {
         Route::post('/{pelajaran}/soal/{soal}/update', [BankSoalController::class, 'update'])->name('soal.update');
         Route::delete('/{pelajaran}/soal/{soal}', [BankSoalController::class, 'destroy'])->name('soal.destroy');
         Route::get('/{pelajaran}/soal/{soal}/data', [BankSoalController::class, 'data'])->name('soal.data');
+    });
+
+    // ─── Pemilihan OSIS: admin/role yg diberi akses (manage_osis) ──────────
+    Route::middleware(['modul:osis', 'permission:manage_osis'])->prefix('osis')->name('osis.')->group(function () {
+        Route::controller(OsisPemilihanController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::post('/', 'store')->name('store');
+            Route::get('/{pemilihan}', 'show')->name('show');
+            Route::patch('/{pemilihan}/aktifkan', 'aktifkan')->name('aktifkan');
+            Route::patch('/{pemilihan}/status', 'updateStatus')->name('status');
+            Route::patch('/{pemilihan}/jadwal', 'updateJadwal')->name('jadwal');
+        });
+
+        Route::controller(OsisPaslonController::class)->prefix('{pemilihan}/paslon')->name('paslon.')->group(function () {
+            Route::post('/', 'store')->name('store');
+            Route::put('/{paslon}', 'update')->name('update');
+            Route::delete('/{paslon}', 'destroy')->name('destroy');
+        });
+
+        Route::controller(OsisPemilihController::class)->prefix('{pemilihan}/pemilih')->name('pemilih.')->group(function () {
+            Route::post('/generate-siswa', 'generateTokenKelas')->name('generateSiswa');
+            Route::post('/generate-guru', 'generateTokenGuru')->name('generateGuru');
+            Route::get('/cetak/kelas/{kelas}', 'cetakKelas')->name('cetakKelas');
+            Route::get('/cetak/guru', 'cetakGuru')->name('cetakGuru');
+            Route::get('/cetak-absensi/kelas/{kelas}', 'cetakAbsensiKelas')->name('cetakAbsensiKelas');
+            Route::get('/cetak-absensi/guru', 'cetakAbsensiGuru')->name('cetakAbsensiGuru');
+            Route::get('/roster/kelas/{kelas}', 'rosterKelas')->name('rosterKelas');
+        });
+
+        Route::controller(OsisDashboardController::class)->prefix('{pemilihan}')->group(function () {
+            Route::get('/dashboard', 'dashboard')->name('dashboard');
+            Route::get('/dashboard/data', 'dashboardData')->middleware('throttle:60,1')->name('dashboard.data');
+            Route::get('/hasil', 'hasil')->name('hasil');
+            Route::get('/hasil/data', 'hasilData')->middleware('throttle:30,1')->name('hasil.data');
+        });
     });
 
     // ─── Keuangan: Bendahara (juga admin/superadmin) ───────────────────────
