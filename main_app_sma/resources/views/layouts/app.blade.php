@@ -196,10 +196,16 @@
             if (typeof document !== 'undefined' && document.hidden) return;
             try { fn(); } catch (_) {}
         };
-        window.simsPollInterval = function (fn, ms) {
-            const id = setInterval(() => window.simsWhenVisible(fn), ms);
+        // Mode darurat hemat server (admin, /settings): saat aktif, SEMUA polling yg TIDAK
+        // ditandai essential berhenti menyegarkan otomatis. Dibaca sekali per page-load —
+        // toggle admin berlaku ke tab yg dimuat/reload SETELAHNYA, bukan instan ke tab yg
+        // sudah terbuka (sengaja, biar toggle-nya sendiri tak perlu polling status).
+        window.SIMS_HEMAT_POLLING = @json(\App\Models\Setting::get('polling_darurat_aktif', '0') === '1');
+        window.simsPollInterval = function (fn, ms, essential = false) {
+            const paused = () => !essential && window.SIMS_HEMAT_POLLING;
+            const id = setInterval(() => { if (!paused()) window.simsWhenVisible(fn); }, ms);
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) window.simsWhenVisible(fn);
+                if (!document.hidden && !paused()) window.simsWhenVisible(fn);
             });
             return id;
         };
@@ -1885,8 +1891,14 @@
                 window.addEventListener('message', (e) => {
                     if (e.data === 'chatfab:close') { this.open = false; this.poll(); }
                 });
-                this.poll();                                   // cek awal saat halaman dibuka
-                window.simsPollInterval(() => this.poll(), 20000); // pause saat tab hidden
+                // Tak polling sendiri lagi — badge numpang di response gabungan bel notifikasi
+                // (NotificationController::badgesLainnya()), dikirim lewat event 'notif-updated'.
+                // poll() manual TETAP dipakai saat panel ditutup (di atas) — itu aksi user, bukan
+                // polling berkala, jadi tak ikut mode darurat.
+                window.addEventListener('notif-updated', (e) => {
+                    if (this.open) return; // saat terbuka, widget mengurus state-nya sendiri
+                    this.unread = Number(e.detail?.chatbotUnread || 0);
+                });
             },
         }
     }
@@ -1946,11 +1958,9 @@
             darkMode: (localStorage.getItem('theme_mode') ?? '{{ $pref->theme_mode ?? 'light' }}') === 'dark',
             uiStyle: '{{ $pref->ui_style ?? 'soft' }}',
             adminChatUnread: 0,
-            adminChatBadgeTimer: null,
             pengumumanUnread: 0,
             grupUnread: 0,
             feedbackUnread: {{ (int) $feedbackUnreadCount }},
-            feedbackBadgeTimer: null,
             toggleCollapse(){ this.collapsed=!this.collapsed; localStorage.setItem('sb_collapsed', this.collapsed?'1':'0'); this.$nextTick(()=>lucide.createIcons()); },
             startSidebarResize(e){
                 if (this.isMobile) return;
@@ -1998,48 +2008,30 @@
                 });
                 this.$nextTick(()=>lucide.createIcons());
             },
+            // Badge chat-admin/masukan/grup: dulu tiap satu poll sendiri (fetch + interval
+            // terpisah, nembak bersamaan tiap halaman dimuat). Sekarang numpang di SATU
+            // response gabungan yg sama dgn bel notifikasi (NotificationController::
+            // badgesLainnya()) — komponen ini jadi murni pendengar event 'notif-updated',
+            // tak polling sendiri lagi sama sekali.
             initAdminChatBadge(){
                 @if($isAdmin)
-                const fetchBadge = async () => {
-                    try {
-                        const response = await fetch('{{ route('chatbot.admin.queue') }}', { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (!response.ok) return;
-                        const data = await response.json();
-                        this.adminChatUnread = Math.max(Number(data.unread_count || 0), Number(data.waiting_count || 0));
-                    } catch (_) {}
-                };
-                fetchBadge();
-                if (!this.adminChatBadgeTimer) this.adminChatBadgeTimer = window.simsPollInterval(fetchBadge, 20000);
+                window.addEventListener('notif-updated', (e) => {
+                    this.adminChatUnread = Number(e.detail?.adminChatUnread || 0);
+                });
                 @endif
             },
             initFeedbackBadge(){
                 @if($canManageFeedback)
-                const fetchBadge = async () => {
-                    try {
-                        const response = await fetch('{{ route('feedback.badge') }}', { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (!response.ok) return;
-                        const data = await response.json();
-                        this.feedbackUnread = Number(data.new_count || 0);
-                    } catch (_) {}
-                };
-                fetchBadge();
-                if (!this.feedbackBadgeTimer) this.feedbackBadgeTimer = window.simsPollInterval(fetchBadge, 20000);
+                window.addEventListener('notif-updated', (e) => {
+                    this.feedbackUnread = Number(e.detail?.feedbackUnread || 0);
+                });
                 @endif
             },
-            // Badge Grup Chat: murni aritmatika (last_seq - last_read_seq) di server,
-            // jadi poll 30 detik tetap murah walau sekolah punya puluhan grup.
             initGrupBadge(){
                 @if($modulOn('grup_chat') && $grupChatTampil)
-                const fetchBadge = async () => {
-                    try {
-                        const response = await fetch('{{ route('grup.badge') }}', { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (!response.ok) return;
-                        const data = await response.json();
-                        this.grupUnread = Number(data.unread || 0);
-                    } catch (_) {}
-                };
-                fetchBadge();
-                if (!this.grupBadgeTimer) this.grupBadgeTimer = window.simsPollInterval(fetchBadge, 30000);
+                window.addEventListener('notif-updated', (e) => {
+                    this.grupUnread = Number(e.detail?.grupUnread || 0);
+                });
                 @endif
             },
             // Tooltip melayang utk ikon sidebar saat mode mini (anti-terpotong overflow).
@@ -2171,9 +2163,14 @@
                     this.audio.preload = 'auto';
                     this.audio.volume = 0.6;
                 } catch (_) { this.audio = null; }
-                this.fetchNotifications();
-                // Polling 15s (was 10s); pause saat tab hidden (simsPollInterval)
-                window.simsPollInterval(() => this.fetchNotifications(), 15000);
+                // Mode darurat hemat server: tahan juga fetch PERTAMA ini (bukan cuma
+                // pengulangannya) — inilah yg justru tembak tepat di detik-detik rawan (banyak
+                // orang login bersamaan), jauh sebelum interval sempat jalan.
+                if (!window.SIMS_HEMAT_POLLING) this.fetchNotifications();
+                // Polling 45s (was 15s — endpoint ini request TERBANYAK di seluruh app, ~8.2rb/jam
+                // pas beban tinggi; notifikasi tak butuh sampai se-real-time itu, tunda beberapa
+                // puluh detik tak masalah) — pause saat tab hidden (simsPollInterval)
+                window.simsPollInterval(() => this.fetchNotifications(), 45000);
             },
             async fetchNotifications() {
                 if (document.hidden) return;
@@ -2189,9 +2186,20 @@
                         }
                         this.prevUnread = data.unreadCount;
                         this.unreadCount = data.unreadCount;
-                        // Umpankan hitung pengumuman ke badge menu sidebar.
+                        // Umpankan hitung pengumuman + badge grup/chatbot/chat-admin/masukan ke
+                        // widget masing2 — respons ini SATU2NYA yg dipoll skrg, gantikan 4 fetch
+                        // terpisah yg dulu nembak bersamaan tiap halaman dimuat & tiap interval
+                        // (lihat NotificationController::badgesLainnya()). Widget yg tak relevan
+                        // utk role user ini tak pernah pasang listener-nya, jadi angka 0 default
+                        // di sini aman diabaikan.
                         window.dispatchEvent(new CustomEvent('notif-updated', {
-                            detail: { unreadPengumuman: Number(data.unreadPengumuman || 0) }
+                            detail: {
+                                unreadPengumuman: Number(data.unreadPengumuman || 0),
+                                grupUnread: Number(data.grupUnread || 0),
+                                chatbotUnread: Number(data.chatbotUnread || 0),
+                                adminChatUnread: Number(data.adminChatUnread || 0),
+                                feedbackUnread: Number(data.feedbackUnread || 0),
+                            }
                         }));
                         this.$nextTick(() => {
                             if (window.lucide) window.lucide.createIcons();
