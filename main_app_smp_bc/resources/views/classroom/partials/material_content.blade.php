@@ -4,11 +4,15 @@
 <div class="flex items-start gap-3">
     <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:color-mix(in srgb, var(--cp) 14%, transparent)"><i data-lucide="book-open" class="w-6 h-6" style="color:var(--cp)"></i></div>
     <div class="min-w-0 flex-1">
-        <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">{{ $material->title }} @if($material->is_locked)<i data-lucide="lock" class="w-4 h-4 text-amber-500"></i>@endif</h1>
-        <p class="text-xs text-slate-400 mt-0.5">{{ $material->uploader?->displayName() }} Ã‚Â· {{ $material->created_at?->locale('id')->diffForHumans() }}</p>
+        <div class="flex items-center gap-2 flex-wrap">
+            @if(!$material->is_published)<span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">Draf</span>@endif
+            <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">{{ $material->title }} @if($material->is_locked)<i data-lucide="lock" class="w-4 h-4 text-amber-500"></i>@endif</h1>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">{{ $material->uploader?->displayName() }} &bull; {{ $material->created_at?->locale('id')->diffForHumans() }}</p>
     </div>
     @if($canManage)
     <div class="flex items-center gap-1 flex-shrink-0">
+        @if(!$material->is_published)<button type="button" @click.prevent.stop="fetch('{{ route('classroom.material.publish', $material) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30" title="Terbitkan Materi"><i data-lucide="send" class="w-4 h-4"></i></button>@endif
         <a href="{{ route('classroom.material.edit', $material) }}" class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-primary"><i data-lucide="pencil" class="w-4 h-4"></i></a>
         <form method="POST" action="{{ route('classroom.material.destroy', $material) }}" onsubmit="return confirmDelete(this)">@csrf @method('DELETE')<button class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button></form>
     </div>

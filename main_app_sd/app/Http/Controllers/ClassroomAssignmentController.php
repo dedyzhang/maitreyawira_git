@@ -355,7 +355,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         
         Audit::log('classroom_assignment_delete', $assignment);
 
-        return back()->with('success', 'Tugas dan seluruh data lampiran berhasil dihapus.');
+        return redirect()->route('classroom.show', $assignment->classroom_id)->with('success', 'Tugas dan seluruh data lampiran berhasil dihapus.');
     }
 
     /** Halaman penilaian: daftar submission per tugas. */
