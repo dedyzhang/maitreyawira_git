@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers;
 
@@ -92,7 +92,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         ]);
     }
 
-    /** Kelas tujuan: mapel sam– TINGKAT sam– dan (guru) hanya yang ia ampu. */
+    /** Kelas tujuan: mapel sama, TINGKAT sama, dan (guru) hanya yang ia ampu. */
     private function kelasOptions(Classroom $classroom, \App\Models\User $user)
     {
         $q = \App\Models\Ngajar::where('id_pelajaran', $classroom->id_pelajaran);
@@ -280,7 +280,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
             $targetName = "Formatif (TP " . ($tp ? $tp->urutan : '') . ": " . ($tp ? \Illuminate\Support\Str::limit($tp->tupe, 35) : '') . ")";
         } else {
             $m = Materi::where('uuid', $data['id_materi'])->first();
-            $targetName = "Sumatif (Materi: " . ($m ? \Illuminate\Support\Str::limit($m->nam– 35) : '') . ")";
+            $targetName = "Sumatif (Materi: " . ($m ? \Illuminate\Support\Str::limit($m->nama, 35) : '') . ")";
         }
 
         Audit::log('classroom_grades_transferred', $assignment, [
@@ -399,6 +399,8 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         return $assignment->classroom;
     }
 }
+
+
 
 
 
