@@ -25,9 +25,9 @@
         <div class="p-4 flex items-center justify-between flex-wrap gap-3">
             <div class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-3 flex-wrap">
                 <span>{{ $classroom->pelajaran?->nama ?? 'Tanpa mapel' }}</span>
-                @if($classroom->semester)<span>Ã‚Â· Semester {{ $classroom->semester->semester }} {{ $classroom->semester->tahun }}</span>@endif
-                <span>Ã‚Â· @foreach($classroom->kelas as $k)<span class="font-medium">{{ $k->tingkat }}{{ $k->kelas }}</span>@if(!$loop->last), @endif @endforeach</span>
-                <span>Ã‚Â· {{ $classroom->members->count() }} siswa</span>
+                @if($classroom->semester)<span>Ãƒâ€šÃ‚Â· Semester {{ $classroom->semester->semester }} {{ $classroom->semester->tahun }}</span>@endif
+                <span>Ãƒâ€šÃ‚Â· @foreach($classroom->kelas as $k)<span class="font-medium">{{ $k->tingkat }}{{ $k->kelas }}</span>@if(!$loop->last), @endif @endforeach</span>
+                <span>Ãƒâ€šÃ‚Â· {{ $classroom->members->count() }} siswa</span>
             </div>
             @if($classroom->rombel)
             <a href="{{ route('classroom.kelas', $classroom->rombel) }}" class="text-sm font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"><i data-lucide="arrow-left" class="w-4 h-4"></i> Mapel lain</a>
@@ -68,9 +68,9 @@
         <a href="{{ route('classroom.material.show', [$m, 'class' => $classroom->uuid]) }}" class="card p-4 flex items-center gap-3 hover:border-primary transition">
             <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:color-mix(in srgb, var(--cp) 14%, transparent)"><i data-lucide="book-open" class="w-5 h-5" style="color:var(--cp)"></i></div>
             <div class="min-w-0 flex-1">
-                <h3 class="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">{{ $m->title }}@if($m->status==='draft')<span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">Draf</span>@if($canManage)<span role="button" @click.prevent="fetch('{{ route('material.publish', $m) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">Terbitkan</span>@endif@endif@if($m->meet_url)<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold flex-shrink-0"><i data-lucide="video" class="w-3 h-3"></i> Meet</span>@endif</h3>
+                <h3 class="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">{{ $m->title }}@if($m->status==='draft')<span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">Draf</span>@if($canManage)<span role="button" @click.prevent="fetch('{{ route('material.publish', $m) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">Terbitkan</span>@endif @endif @if($m->meet_url)<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold flex-shrink-0"><i data-lucide="video" class="w-3 h-3"></i> Meet</span>@endif</h3>
                 @if($m->description)<p class="text-sm text-slate-500 dark:text-slate-400 truncate">{{ $m->description }}</p>@endif
-                <p class="text-[11px] text-slate-400 mt-0.5">{{ $m->uploader?->displayName() }} Ã‚Â· {{ $m->created_at?->locale('id')->diffForHumans() }}</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">{{ $m->uploader?->displayName() }} Ãƒâ€šÃ‚Â· {{ $m->created_at?->locale('id')->diffForHumans() }}</p>
             </div>
             <div class="flex items-center gap-3 text-xs text-slate-400 flex-shrink-0">
                 @if($canManage)<span role="button" @click.prevent="if(confirm('Hapus materi ini?')) fetch('{{ route('material.destroy', $m) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/x-www-form-urlencoded'}, body: '_method=DELETE'}).then(()=>window.location.reload())" class="text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded" title="Hapus Materi"><i data-lucide="trash-2" class="w-4 h-4"></i></span>@endif<span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> {{ $m->comments_count }}</span>
@@ -94,11 +94,11 @@
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 capitalize">{{ $a->type }}</span>
-                    @if($a->status==='draft')<span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">Draf</span>@if($canManage)<span role="button" @click.prevent="fetch('{{ route('assignment.publish', $a) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">Terbitkan</span>@endif@endif
+                    @if($a->status==='draft')<span class="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">Draf</span>@if($canManage)<span role="button" @click.prevent="fetch('{{ route('assignment.publish', $a) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">Terbitkan</span>@endif @endif
                     <h3 class="font-bold text-slate-800 dark:text-slate-100 truncate">{{ $a->title }}</h3>
                 </div>
-                <p class="text-xs text-slate-400 mt-0.5">Nilai maks {{ $a->max_score }}@if($a->due_at) Ã‚Â· Batas {{ $a->due_at->locale('id')->translatedFormat('d M Y H:i') }}@endif
-                    @if($me->access==='siswa') @php $sub=$mySubmissions[$a->uuid]??null; @endphp Ã‚Â· @if($sub && $sub->status==='graded')<span class="text-emerald-600 font-semibold">@if($a->hide_scores)Tugas sudah dikoreksi@elseNilai {{ $sub->score }}@endif</span>@elseif($sub)<span class="text-sky-600">Sudah dikumpulkan</span>@else<span class="text-amber-600">Belum dikumpulkan</span>@endif @endif
+                <p class="text-xs text-slate-400 mt-0.5">Nilai maks {{ $a->max_score }}@if($a->due_at) Ãƒâ€šÃ‚Â· Batas {{ $a->due_at->locale('id')->translatedFormat('d M Y H:i') }}@endif
+                    @if($me->access==='siswa') @php $sub=$mySubmissions[$a->uuid]??null; @endphp Ãƒâ€šÃ‚Â· @if($sub && $sub->status==='graded')<span class="text-emerald-600 font-semibold">@if($a->hide_scores)Tugas sudah dikoreksi@elseNilai {{ $sub->score }}@endif</span>@elseif($sub)<span class="text-sky-600">Sudah dikumpulkan</span>@else<span class="text-amber-600">Belum dikumpulkan</span>@endif @endif
                 </p>
             </div>
             <div class="flex items-center gap-3 text-xs text-slate-400 flex-shrink-0">
@@ -128,6 +128,8 @@
     </div>
 </div>
 @endsection
+
+
 
 
 
