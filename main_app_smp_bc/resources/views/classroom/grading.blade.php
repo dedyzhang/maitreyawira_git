@@ -23,7 +23,7 @@
                     <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:var(--cp)">{{ $s->student?->initial() ?? '?' }}</div>
                     <div>
                         <p class="font-semibold text-slate-800 dark:text-slate-100">{{ $s->student?->displayName() }}</p>
-                        <p class="text-[11px] text-slate-400">Dikumpulkan {{ $s->submitted_at?->locale('id')->diffForHumans() }} @if($s->is_late)<span class="text-rose-500">Ã‚Â· terlambat</span>@endif</p>
+                        <p class="text-[11px] text-slate-400">Dikumpulkan {{ $s->submitted_at?->locale('id')->diffForHumans() }} @if($s->is_late)<span class="text-rose-500">Ãƒâ€šÃ‚Â· terlambat</span>@endif</p>
                     </div>
                 </div>
                 @if($s->body)<div class="text-sm text-slate-700 dark:text-slate-200 mt-2 leading-relaxed">@include('classroom.partials.richbody', ['html' => $s->body])</div>@endif
@@ -50,15 +50,13 @@
             </div>
             @if(in_array($s->status, ['submitted', 'graded']))
             <div class="flex items-end gap-2 flex-shrink-0">
-                <form method="POST" action="{{ route('classroom.submission.grade', $s) }}" class="flex items-end gap-2">
+                <form method="POST" action="{{ route('classroom.submission.grade', $s) }}" class="flex flex-wrap items-end gap-2">
                     @csrf
                     <div>
                         <label class="form-label text-xs">Nilai</label>
                         <input type="number" name="score" value="{{ $s->score }}" min="0" max="{{ $assignment->max_score }}" class="form-input w-24" required>
                     </div>
-                    <div>
-                        <label class="form-label text-xs">Feedback</label>
-                        <input type="text" name="feedback" value="{{ $s->feedback }}" class="form-input w-56" placeholder="Catatan (opsional)">
+                    <div class="flex-1 min-w-[150px]"><label class="form-label text-xs">Feedback</label><input type="text" name="feedback" value="{{ $s->feedback }}" class="form-input w-full" placeholder="Catatan (opsional)">
                     </div>
                     <button class="px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow" style="background:var(--cp)">Simpan</button>
                 </form>
@@ -80,7 +78,7 @@
             </div>
             @endif
         </div>
-        @if($s->status==='graded')<p class="text-xs text-emerald-600 mt-2">Ã¢Å“â€œ Dinilai: {{ $s->score }}/{{ $assignment->max_score }}</p>@endif
+        @if($s->status==='graded')<p class="text-xs text-emerald-600 mt-2">ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Dinilai: {{ $s->score }}/{{ $assignment->max_score }}</p>@endif
     </div>
     @empty
     <div class="card p-10 text-center text-slate-400"><i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i><p>Belum ada pengumpulan.</p></div>
@@ -88,6 +86,7 @@
 @include('classroom.partials.file_preview_modal')
 </div>
 @endsection
+
 
 
 

@@ -82,19 +82,26 @@
                 @include('classroom.partials.editor', ['name' => 'body', 'value' => $mySubmission->body ?? ''])
             </div>
             @if($mySubmission && $mySubmission->files->isNotEmpty())
-            <div>
-                <label class="form-label text-xs">Lampiran S·t Ini</label>
-                <div class="flex flex-wrap gap-2 mb-2">
-                    @foreach($mySubmission->files as $f)
-@php $canPreview = $f->isImage() || $f->mime === 'application/pdf'; @endphp
-@if($canPreview)
-<button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</button>
-@else
-<a href="{{ route('classroom.submission.file', $f) }}" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="paperclip" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</a>
-@endif
-@endforeach
-                </div>
-            </div>
+              <div>
+                  <label class="form-label text-xs">Lampiran Saat Ini</label>
+                  <div class="flex flex-wrap gap-2 mb-2">
+                      @foreach($mySubmission->files as $f)
+                      @php $canPreview = $f->isImage() || $f->mime === 'application/pdf'; @endphp
+                      <div class="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden hover:border-primary">
+                          @if($canPreview)
+                          <button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
+                              <i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}
+                          </button>
+                          @else
+                          <a href="{{ route('classroom.submission.file', $f) }}" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
+                              <i data-lucide="paperclip" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}
+                          </a>
+                          @endif
+                          <button type="button" onclick="if(confirm('Hapus lampiran ini?')) fetch('{{ route('submission.file.delete', $f) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/x-www-form-urlencoded'}, body: '_method=DELETE'}).then(()=>window.location.reload())" class="text-rose-500 hover:bg-rose-50 px-2 py-1.5 border-l border-slate-200 dark:border-slate-600" title="Hapus"><i data-lucide="x" class="w-3 h-3"></i></button>
+                      </div>
+                      @endforeach
+                  </div>
+              </div>
             @endif
             @include('classroom.partials.upload', ['label' => 'Tambah Lampiran (gambar/PDF)'])
             <div class="flex justify-end gap-2 pt-2">
@@ -107,6 +114,7 @@
 
 @include('classroom.partials.file_preview_modal')
 </div>
+
 
 
 
