@@ -1,4 +1,4 @@
-<div x-data="filePreviewModal()">
+﻿<div x-data="filePreviewModal()">
 {{-- Blok pengumpulan siswa (status + form). Var: $assignment, $mySubmission --}}
 @php
     $warningTime = false; $timeLeftStr = '';
@@ -60,9 +60,9 @@
                     @foreach($mySubmission->files as $f)
 @php $canPreview = $f->isImage() || $f->mime === 'application/pdf'; @endphp
 @if($canPreview)
-<button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class=" text-left"><i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class=""></i><span>{{ \Illuminate\Support\Str::limit($f->original_name, ) }}</span></button>
+<button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</button>
 @else
-<a href="{{ route('classroom.submission.file', $f) }}" class=""><i data-lucide="paperclip" class=""></i><span>{{ \Illuminate\Support\Str::limit($f->original_name, ) }}</span></a>
+<a href="{{ route('classroom.submission.file', $f) }}" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="paperclip" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</a>
 @endif
 @endforeach
                 </div>
@@ -78,19 +78,19 @@
             @csrf
             <div>
                 <label class="form-label">Jawaban Anda</label>
-                <p class="text-[11px] text-slate-400 mb-2">Tulis jawaban (opsional jika melampirkan file). Bisa menggunakan editor matematika visual <b>âˆ‘ Rumus</b> &amp; <b>â–¶ YouTube</b>.</p>
+                <p class="text-[11px] text-slate-400 mb-2">Tulis jawaban (opsional jika melampirkan file). Bisa menggunakan editor matematika visual <b>&sum; Rumus</b> &amp; <b>&#9654; YouTube</b>.</p>
                 @include('classroom.partials.editor', ['name' => 'body', 'value' => $mySubmission->body ?? ''])
             </div>
             @if($mySubmission && $mySubmission->files->isNotEmpty())
             <div>
-                <label class="form-label text-xs">Lampiran Saat Ini</label>
+                <label class="form-label text-xs">Lampiran S·t Ini</label>
                 <div class="flex flex-wrap gap-2 mb-2">
                     @foreach($mySubmission->files as $f)
 @php $canPreview = $f->isImage() || $f->mime === 'application/pdf'; @endphp
 @if($canPreview)
-<button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class=" text-left"><i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class=""></i><span>{{ \Illuminate\Support\Str::limit($f->original_name, ) }}</span></button>
+<button type="button" @click="open('{{ route('classroom.submission.file.preview', $f) }}', '{{ route('classroom.submission.file', $f) }}', '{{ addslashes($f->original_name) }}', {{ $f->isImage() ? 'true' : 'false' }})" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="{{ $f->isImage() ? 'image' : 'file-text' }}" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</button>
 @else
-<a href="{{ route('classroom.submission.file', $f) }}" class=""><i data-lucide="paperclip" class=""></i><span>{{ \Illuminate\Support\Str::limit($f->original_name, ) }}</span></a>
+<a href="{{ route('classroom.submission.file', $f) }}" class="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-primary"><i data-lucide="paperclip" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}</a>
 @endif
 @endforeach
                 </div>
@@ -107,3 +107,9 @@
 
 @include('classroom.partials.file_preview_modal')
 </div>
+
+
+
+
+
+
