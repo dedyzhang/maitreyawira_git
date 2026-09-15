@@ -82,7 +82,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
     public function publish(Request $request, ClassroomMaterial $material)
     {
         $this->authorize('manage', $this->resolveViewableClassroom($material, $request->user()));
-        $material->update(['status' => 'published']);
+        $material->update(['is_published' => true, 'published_at' => now()]);
         return back()->with('success', 'Materi berhasil diterbitkan.');
     }
 
@@ -104,7 +104,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
 
         $canManage = $user->can('manage', $classroom);
         $isStudent = $user->access === 'siswa';
-        // Materi terkunci â†’ siswa harus buka token dulu (kecuali guru/admin pengelola).
+        // Materi terkunci Ã¢â€ â€™ siswa harus buka token dulu (kecuali guru/admin pengelola).
         $gateLocked = $material->is_locked && $isStudent && !$canManage && !$this->lockIsUnlocked($material->uuid);
         $kioskMode  = $material->is_locked && $isStudent && !$canManage && $this->lockIsUnlocked($material->uuid);
 
@@ -177,7 +177,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         return Storage::disk('public')->download($file->path, $file->original_name);
     }
 
-    /** Tampilkan file (gambar/PDF) inline di modal tanpa pindah halaman â€” dibutuhkan utk materi terkunci (layar penuh). */
+    /** Tampilkan file (gambar/PDF) inline di modal tanpa pindah halaman Ã¢â‚¬â€ dibutuhkan utk materi terkunci (layar penuh). */
     public function preview(Request $request, ClassroomMaterialFile $file)
     {
         $this->authorize('view', $this->resolveViewableClassroom($file->material, $request->user()));
@@ -190,10 +190,10 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
     }
 
     /**
-     * Satu materi bisa ditaut ke BANYAK kelas sekaligus (classroom_material_links) â€” kelas
+     * Satu materi bisa ditaut ke BANYAK kelas sekaligus (classroom_material_links) Ã¢â‚¬â€ kelas
      * "asal" (`ClassroomMaterial::classroom()`) cuma satu, dipakai buat breadcrumb. Siswa/guru
      * yg mengakses materi ini lewat kelas MEREKA SENDIRI (bukan kelas asal) harus tetap lolos
-     * â€” cari dulu kelas yg ditaut & relevan ke user ini, baru fallback ke kelas asal kalau
+     * Ã¢â‚¬â€ cari dulu kelas yg ditaut & relevan ke user ini, baru fallback ke kelas asal kalau
      * tak ketemu (mis. guru/admin pengelola yg bukan anggota kelas manapun).
      */
     private function resolveViewableClassroom(ClassroomMaterial $material, User $user): ?Classroom
@@ -215,7 +215,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         return $material->classroom;
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Materi terkunci (token + layar penuh) â€” via HandlesContentLock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Materi terkunci (token + layar penuh) Ã¢â‚¬â€ via HandlesContentLock Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     public function toggleLock(Request $request, ClassroomMaterial $material)
     {
@@ -244,10 +244,10 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         $material->update(['meet_url' => null]);
         Audit::log('classroom_meet_closed', $material);
 
-        return back()->with('success', 'Kelas online ditutup â€” link Google Meet dihapus.');
+        return back()->with('success', 'Kelas online ditutup Ã¢â‚¬â€ link Google Meet dihapus.');
     }
 
-    /** Normalisasi input Google Meet (URL penuh atau kode xxx-xxxx-xxx) â†’ URL bersih. */
+    /** Normalisasi input Google Meet (URL penuh atau kode xxx-xxxx-xxx) Ã¢â€ â€™ URL bersih. */
     private function normalizeMeet(?string $v): ?string
     {
         $v = trim((string) $v);
@@ -265,7 +265,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
 
     /**
      * Kelas tujuan taut/duplikat: mapel SAMA, TINGKAT SAMA, dan (untuk guru) hanya
-     * kelas yang ia ampu sendiri. Mis. dari Matematika 7A â†’ hanya 7B/7C/7D.
+     * kelas yang ia ampu sendiri. Mis. dari Matematika 7A Ã¢â€ â€™ hanya 7B/7C/7D.
      */
     private function kelasOptions(Classroom $classroom, User $user)
     {
@@ -282,4 +282,5 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
             ->orderBy('kelas')->get();
     }
 }
+
 
