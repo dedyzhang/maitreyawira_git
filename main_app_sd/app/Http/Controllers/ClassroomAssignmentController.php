@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -92,7 +92,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         ]);
     }
 
-    /** Kelas tujuan: mapel sama, TINGKAT sama, dan (guru) hanya yang ia ampu. */
+    /** Kelas tujuan: mapel sam– TINGKAT sam– dan (guru) hanya yang ia ampu. */
     private function kelasOptions(Classroom $classroom, \App\Models\User $user)
     {
         $q = \App\Models\Ngajar::where('id_pelajaran', $classroom->id_pelajaran);
@@ -193,7 +193,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         ));
     }
 
-    // â”€â”€â”€ Kunci (token + layar penuh) â€” via HandlesContentLock â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Kunci (token + layar penuh) Ã¢â‚¬â€ via HandlesContentLock Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     public function toggleLock(Request $request, ClassroomAssignment $assignment)
     {
         return $this->lockToggle($request, $assignment);
@@ -225,7 +225,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
             'id_materi' => 'nullable|required_if:type,sumatif|exists:materi,uuid',
         ]);
 
-        // Tentukan materi tujuan â†’ untuk tahu ngajar & semester-nya.
+        // Tentukan materi tujuan Ã¢â€ â€™ untuk tahu ngajar & semester-nya.
         $targetMateri = $data['type'] === 'formatif'
             ? Materi::find(TujuanPembelajaran::where('uuid', $data['id_tupe'])->value('id_materi'))
             : Materi::find($data['id_materi']);
@@ -280,7 +280,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
             $targetName = "Formatif (TP " . ($tp ? $tp->urutan : '') . ": " . ($tp ? \Illuminate\Support\Str::limit($tp->tupe, 35) : '') . ")";
         } else {
             $m = Materi::where('uuid', $data['id_materi'])->first();
-            $targetName = "Sumatif (Materi: " . ($m ? \Illuminate\Support\Str::limit($m->nama, 35) : '') . ")";
+            $targetName = "Sumatif (Materi: " . ($m ? \Illuminate\Support\Str::limit($m->nam– 35) : '') . ")";
         }
 
         Audit::log('classroom_grades_transferred', $assignment, [
@@ -374,10 +374,10 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
     }
 
     /**
-     * Satu tugas bisa ditaut ke BANYAK kelas sekaligus (classroom_assignment_links) â€” kelas
+     * Satu tugas bisa ditaut ke BANYAK kelas sekaligus (classroom_assignment_links) Ã¢â‚¬â€ kelas
      * "asal" (`ClassroomAssignment::classroom()`) cuma satu, dipakai buat breadcrumb. Siswa/
      * guru yg mengakses tugas ini lewat kelas MEREKA SENDIRI (bukan kelas asal) harus tetap
-     * lolos â€” cari dulu kelas yg ditaut & relevan ke user ini, baru fallback ke kelas asal
+     * lolos Ã¢â‚¬â€ cari dulu kelas yg ditaut & relevan ke user ini, baru fallback ke kelas asal
      * kalau tak ketemu (mis. guru/admin pengelola yg bukan anggota kelas manapun).
      */
     private function resolveViewableClassroom(ClassroomAssignment $assignment, User $user): ?Classroom
@@ -399,4 +399,6 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         return $assignment->classroom;
     }
 }
+
+
 

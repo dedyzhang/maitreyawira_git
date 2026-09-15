@@ -85,9 +85,10 @@
     @empty
     <div class="card p-10 text-center text-slate-400"><i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i><p>Belum ada pengumpulan.</p></div>
     @endforelse
-</div>
 @include('classroom.partials.file_preview_modal')
+</div>
 @endsection
+
 
 
 

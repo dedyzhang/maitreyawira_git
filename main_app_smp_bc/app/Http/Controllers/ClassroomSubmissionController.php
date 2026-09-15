@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -31,11 +31,11 @@ class ClassroomSubmissionController extends Controller implements \Illuminate\Ro
     /** Siswa mengumpulkan tugas (boleh banyak file). */
     public function store(StoreClassroomSubmissionRequest $request, ClassroomAssignment $assignment)
     {
-        // Satu tugas bisa ditaut ke BANYAK kelas (classroom_assignment_links) â€” resolveClassroom()
+        // Satu tugas bisa ditaut ke BANYAK kelas (classroom_assignment_links) Ã¢â‚¬â€ resolveClassroom()
         // (dr HandlesContentLock, dipakai jg oleh show/download/lock) cari dulu kelas yg ditaut &
         // cocok dgn id_kelas siswa ini, baru fallback ke $assignment->classroom (kelas asal). Dulu
-        // di sini langsung pakai $assignment->classroom mentah2 â€” siswa yg akses tugas ini lewat
-        // kelasnya SENDIRI (bukan kelas asal tempat tugas dibuat) kena 403 walau keanggotaannya di
+        // di sini langsung pakai $assignment->classroom mentah2 Ã¢â‚¬â€ siswa yg akses tugas ini lewat
+        // kelasnya SENDIRI (bukan kelas asal tempat tugas dibuat) kena 403 walau keanggot·nnya di
         // kelasnya sendiri valid, krn authorize() ceknya ke classroom yg SALAH.
         $classroom = $this->resolveClassroom($request, $assignment);
         $this->authorize('submit', $classroom);
@@ -87,7 +87,7 @@ class ClassroomSubmissionController extends Controller implements \Illuminate\Ro
     public function grade(GradeClassroomSubmissionRequest $request, ClassroomSubmission $submission)
     {
         // Pakai kelas TEMPAT SUBMISSION INI DIKUMPULKAN ($submission->classroom, terisi sejak
-        // store()), bukan kelas asal tugas â€” guru yg mengampu kelas lain yg ditaut jangan sampai
+        // store()), bukan kelas asal tugas Ã¢â‚¬â€ guru yg mengampu kelas lain yg ditaut jangan sampai
         // 403 gara2 ceknya ke kelas asal (pola sama dgn download(), lihat catatan di bawah).
         $this->authorize('manage', $submission->classroom ?? $submission->assignment->classroom);
 
@@ -150,4 +150,6 @@ class ClassroomSubmissionController extends Controller implements \Illuminate\Ro
         ]);
     }
 }
+
+
 
