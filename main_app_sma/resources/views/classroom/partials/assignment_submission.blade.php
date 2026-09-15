@@ -97,7 +97,7 @@
                               <i data-lucide="paperclip" class="w-3 h-3"></i> {{ \Illuminate\Support\Str::limit($f->original_name, 26) }}
                           </a>
                           @endif
-                          <button type="button" onclick="if(confirm('Hapus lampiran ini?')) fetch('{{ route('submission.file.delete', $f) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/x-www-form-urlencoded'}, body: '_method=DELETE'}).then(()=>window.location.reload())" class="text-rose-500 hover:bg-rose-50 px-2 py-1.5 border-l border-slate-200 dark:border-slate-600" title="Hapus"><i data-lucide="x" class="w-3 h-3"></i></button>
+                          <button type="button" onclick="if(confirm('Hapus lampiran ini?')) fetch('{{ route('classroom.submission.file.delete', $f) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/x-www-form-urlencoded'}, body: '_method=DELETE'}).then(()=>window.location.reload())" class="text-rose-500 hover:bg-rose-50 px-2 py-1.5 border-l border-slate-200 dark:border-slate-600" title="Hapus"><i data-lucide="x" class="w-3 h-3"></i></button>
                       </div>
                       @endforeach
                   </div>
@@ -114,6 +114,7 @@
 
 @include('classroom.partials.file_preview_modal')
 </div>
+
 
 
 
