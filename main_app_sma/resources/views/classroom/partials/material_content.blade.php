@@ -14,7 +14,13 @@
     <div class="flex items-center gap-1 flex-shrink-0">
         @if(!$material->is_published)<button type="button" @click.prevent.stop="fetch('{{ route('classroom.material.publish', $material) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30" title="Terbitkan Materi"><i data-lucide="send" class="w-4 h-4"></i></button>@endif
         <a href="{{ route('classroom.material.edit', $material) }}" class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-primary"><i data-lucide="pencil" class="w-4 h-4"></i></a>
-        <form method="POST" action="{{ route('classroom.material.destroy', $material) }}" onsubmit="return confirmDelete(this)">@csrf @method('DELETE')<button class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button></form>
+        <form class="inline" method="POST" action="{{ route('classroom.material.destroy', ['material' => $material->uuid, 'class' => $classroom->uuid]) }}" onsubmit="return confirmAction(this, 'Hapus materi ini?', 'red')">
+            @csrf
+            @method('DELETE')
+            <button class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-rose-600" title="Hapus Materi">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        </form>
     </div>
     @endif
 </div>

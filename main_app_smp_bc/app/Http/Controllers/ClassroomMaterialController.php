@@ -150,10 +150,13 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         return redirect()->route('classroom.material.show', $material)->with('success', 'Materi diperbarui untuk semua kelas tertaut.');
     }
 
-    public function destroy(ClassroomMaterial $material)
+    public function destroy(Request $request, ClassroomMaterial $material)
     {
-        $this->authorize('manage', $material->classroom);
-        $classroom = $material->classroom;
+        $classUuid = $request->query('class');
+        $classroom = $classUuid ? $material->classrooms()->where('uuid', $classUuid)->first() : null;
+        $classroom ??= $this->resolveViewableClassroom($material, $request->user()) ?? $material->classroom;
+
+        $this->authorize('manage', $classroom);
 
         foreach ($material->files as $file) {
             if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file->path)) {

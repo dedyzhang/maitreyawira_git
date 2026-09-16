@@ -327,9 +327,13 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         return redirect()->route('classroom.assignment.show', $assignment)->with('success', 'Tugas diperbarui untuk semua kelas tertaut.');
     }
 
-    public function destroy(ClassroomAssignment $assignment)
+    public function destroy(Request $request, ClassroomAssignment $assignment)
     {
-        $this->authorize('manage', $assignment->classroom);
+        $classUuid = $request->query('class');
+        $classroom = $classUuid ? $assignment->classrooms()->where('uuid', $classUuid)->first() : null;
+        $classroom ??= $this->resolveViewableClassroom($assignment, $request->user()) ?? $assignment->classroom;
+
+        $this->authorize('manage', $classroom);
 
         foreach ($assignment->files as $file) {
             if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file->path)) {
@@ -355,7 +359,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         
         Audit::log('classroom_assignment_delete', $assignment);
 
-        return redirect()->route('classroom.show', $assignment->classroom_id)->with('success', 'Tugas dan seluruh data lampiran berhasil dihapus.');
+        return redirect()->route('classroom.show', $classroom)->with('success', 'Tugas dan seluruh data lampiran berhasil dihapus.');
     }
 
     /** Halaman penilaian: daftar submission per tugas. */

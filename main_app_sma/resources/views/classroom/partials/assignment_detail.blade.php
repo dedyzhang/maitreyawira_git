@@ -19,7 +19,13 @@
         @if($canManage)
         @if($assignment->status==='draft')<button type="button" @click.prevent.stop="fetch('{{ route('classroom.assignment.publish', $assignment) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30" title="Terbitkan Tugas"><i data-lucide="send" class="w-4 h-4"></i></button>@endif
         <a href="{{ route('classroom.assignment.edit', $assignment) }}" class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-primary"><i data-lucide="pencil" class="w-4 h-4"></i></a>
-        <form method="POST" action="{{ route('classroom.assignment.destroy', $assignment) }}" onsubmit="return confirmDelete(this)">@csrf @method('DELETE')<button class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button></form>
+        <form class="inline" method="POST" action="{{ route('classroom.assignment.destroy', ['assignment' => $assignment->uuid, 'class' => $classroom->uuid]) }}" onsubmit="return confirmAction(this, 'Hapus tugas ini beserta seluruh file lampirannya?', 'red')">
+            @csrf
+            @method('DELETE')
+            <button class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-rose-600" title="Hapus Tugas">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        </form>
         @endif
     </div>
     @endif
