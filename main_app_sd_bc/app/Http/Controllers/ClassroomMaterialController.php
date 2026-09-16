@@ -86,6 +86,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         return back()->with('success', 'Materi berhasil diterbitkan.');
     }
 
+
     public function show(Request $request, ClassroomMaterial $material)
     {
         $classUuid = $request->query('class');
@@ -251,7 +252,7 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
         $material->update(['meet_url' => null]);
         Audit::log('classroom_meet_closed', $material);
 
-        return back()->with('success', 'Kelas online ditutup Ã¢â‚¬â€ link Google Meet dihapus.');
+        return back()->with('success', 'Kelas online ditutup - link Google Meet dihapus.');
     }
 
     /** Normalisasi input Google Meet (URL penuh atau kode xxx-xxxx-xxx) Ã¢â€ â€™ URL bersih. */

@@ -142,7 +142,7 @@ class ClassroomSubmissionController extends Controller implements \Illuminate\Ro
     {
         $submission = $file->submission;
         abort_unless(
-            auth()->user()->can('manage', $submission->classroom ?? $submission->assignment->classroom) || $submission->student_id === auth()->id(),
+            auth()->user()->can('monitor', $submission->classroom ?? $submission->assignment->classroom) || $submission->student_id === auth()->id(),
             403
         );
 
@@ -154,7 +154,7 @@ class ClassroomSubmissionController extends Controller implements \Illuminate\Ro
     {
         $submission = $file->submission;
         abort_unless(
-            auth()->user()->can('manage', $submission->classroom ?? $submission->assignment->classroom) || $submission->student_id === auth()->id(),
+            auth()->user()->can('monitor', $submission->classroom ?? $submission->assignment->classroom) || $submission->student_id === auth()->id(),
             403
         );
 

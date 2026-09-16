@@ -36,7 +36,7 @@
 <div class="flex flex-wrap items-center gap-2 mt-4">
     <a href="{{ $material->meet_url }}" target="_blank" rel="noopener" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition" style="background:#16a34a">
         <i data-lucide="video" class="w-4 h-4"></i> Gabung Google Meet
-        <span class="text-[11px] font-normal opacity-80 hidden sm:inline">Ã‚Â· {{ \Illuminate\Support\Str::after($material->meet_url, 'meet.google.com/') }}</span>
+        <span class="text-[11px] font-normal opacity-80 hidden sm:inline">&bull; {{ \Illuminate\Support\Str::after($material->meet_url, 'meet.google.com/') }}</span>
     </a>
     @if($canManage)
     <form method="POST" action="{{ route('classroom.material.closemeet', $material) }}" onsubmit="return confirmAction(this, 'Tutup kelas online? Link Google Meet akan dihapus dari materi ini.', 'orange')">@csrf

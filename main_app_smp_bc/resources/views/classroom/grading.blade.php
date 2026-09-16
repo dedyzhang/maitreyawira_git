@@ -23,7 +23,7 @@
                     <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:var(--cp)">{{ $s->student?->initial() ?? '?' }}</div>
                     <div>
                         <p class="font-semibold text-slate-800 dark:text-slate-100">{{ $s->student?->displayName() }}</p>
-                        <p class="text-[11px] text-slate-400">Dikumpulkan {{ $s->submitted_at?->locale('id')->diffForHumans() }} @if($s->is_late)<span class="text-rose-500">Ãƒâ€šÃ‚Â· terlambat</span>@endif</p>
+                        <p class="text-[11px] text-slate-400">Dikumpulkan {{ $s->submitted_at?->locale('id')->diffForHumans() }} @if($s->is_late)<span class="text-rose-500">&bull; terlambat</span>@endif</p>
                     </div>
                 </div>
                 @if($s->body)<div class="text-sm text-slate-700 dark:text-slate-200 mt-2 leading-relaxed">@include('classroom.partials.richbody', ['html' => $s->body])</div>@endif
@@ -79,7 +79,7 @@
             </div>
             @endif
         </div>
-        @if($s->status==='graded')<p class="text-xs text-emerald-600 mt-2">ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Dinilai: {{ $s->score }}/{{ $assignment->max_score }}</p>@endif
+        @if($s->status==='graded')<p class="text-xs text-emerald-600 mt-2 flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Dinilai: {{ $s->score }}/{{ $assignment->max_score }}</p>@endif
     </div>
     @empty
     <div class="card p-10 text-center text-slate-400"><i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i><p>Belum ada pengumpulan.</p></div>
