@@ -112,7 +112,7 @@
                 </p>
             </div>
             <div class="flex items-center gap-3 text-xs text-slate-400 flex-shrink-0">
-                @if($canManage)<span class="font-semibold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600">{{ $a->submissions_count }} kumpul</span>@endif
+                @if($canMonitor)<span class="font-semibold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600">{{ $a->submissions_count }} kumpul</span>@endif
                 @if($canManage)@if($a->status==='draft')<span role="button" @click.prevent.stop="fetch('{{ route('classroom.assignment.publish', $a) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}}).then(()=>window.location.reload())" class="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 p-1.5 rounded" title="Terbitkan Tugas"><i data-lucide="send" class="w-4 h-4"></i></span>@endif<span role="button" @click.prevent.stop="if(confirm('Hapus tugas ini?')) fetch('{{ route('classroom.assignment.destroy', $a) }}', {method: 'POST', headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/x-www-form-urlencoded'}, body: '_method=DELETE'}).then(()=>window.location.reload())" class="text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded" title="Hapus Tugas"><i data-lucide="trash-2" class="w-4 h-4"></i></span>@endif<span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> {{ $a->comments_count }}</span>
                 <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </div>

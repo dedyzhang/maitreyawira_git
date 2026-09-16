@@ -365,7 +365,7 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
         $classroom = $classUuid ? $assignment->classrooms()->where('uuid', $classUuid)->first() : null;
         $classroom ??= $this->resolveViewableClassroom($assignment, $request->user());
 
-        $this->authorize('manage', $classroom);
+        $this->authorize('monitor', $classroom);
 
         // Get student UUIDs for the active classroom
         $studentUserUuids = [];
@@ -420,10 +420,14 @@ class ClassroomAssignmentController extends Controller implements \Illuminate\Ro
             }
         }
         if ($user->guru) {
-            $ids = Ngajar::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
-            $classroom = $assignment->classrooms()->whereIn('id_kelas', $ids)->first();
-            if ($classroom) {
-                return $classroom;
+            $ngajarIds = \App\Models\Ngajar::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
+            $waliIds = \App\Models\Walikelas::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
+            $ids = array_unique(array_merge($ngajarIds, $waliIds));
+            if (!empty($ids)) {
+                $classroom = $assignment->classrooms()->whereIn('id_kelas', $ids)->first();
+                if ($classroom) {
+                    return $classroom;
+                }
             }
         }
 

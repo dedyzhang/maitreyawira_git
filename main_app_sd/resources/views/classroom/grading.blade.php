@@ -48,27 +48,28 @@
                 </div>
                 @endif
             </div>
-            @if(in_array($s->status, ['submitted', 'graded']))
-            <div class="flex items-end gap-2 flex-shrink-0">
-                <form method="POST" action="{{ route('classroom.submission.grade', $s) }}" class="flex flex-wrap items-end gap-2">
-                    @csrf
-                    <div>
-                        <label class="form-label text-xs">Nilai</label>
-                        <input type="number" name="score" value="{{ $s->score }}" min="0" max="{{ $assignment->max_score }}" class="form-input w-24" required>
-                    </div>
-                    <div class="flex-1 min-w-[150px]"><label class="form-label text-xs">Feedback</label><input type="text" name="feedback" value="{{ $s->feedback }}" class="form-input w-full" placeholder="Catatan (opsional)">
-                    </div>
-                    <button class="px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow" style="background:var(--cp)">Simpan</button>
-                </form>
+              @if(in_array($s->status, ['submitted', 'graded']))
+              @can('manage', $classroom)
+              <div class="flex items-end gap-2 flex-shrink-0">
+                  <form method="POST" action="{{ route('classroom.submission.grade', $s) }}" class="flex flex-wrap items-end gap-2">
+                      @csrf
+                      <div>
+                          <label class="form-label text-xs">Nilai</label>
+                          <input type="number" name="score" value="{{ $s->score }}" min="0" max="{{ $assignment->max_score }}" class="form-input w-24" required>
+                      </div>
+                      <div class="flex-1 min-w-[150px]"><label class="form-label text-xs">Feedback</label><input type="text" name="feedback" value="{{ $s->feedback }}" class="form-input w-full" placeholder="Catatan (opsional)"></div>
+                      <button class="px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow" style="background:var(--cp)">Simpan</button>
+                  </form>
 
-                <form method="POST" action="{{ route('classroom.submission.return', $s) }}" onsubmit="return confirmAction(this, 'Batalkan pengumpulan tugas dari siswa ini agar siswa dapat merevisi jawabannya?', 'orange')" class="inline">
-                    @csrf
-                    <button type="submit" class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-rose-200 dark:border-rose-800 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 whitespace-nowrap transition" title="Kembalikan jawaban untuk direvisi">
-                        Batalkan Jawaban
-                    </button>
-                </form>
-            </div>
-            @else
+                  <form method="POST" action="{{ route('classroom.submission.return', $s) }}" onsubmit="return confirmAction(this, 'Batalkan pengumpulan tugas dari siswa ini agar siswa dapat merevisi jawabannya?', 'orange')" class="inline">
+                      @csrf
+                      <button type="submit" class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-rose-200 dark:border-rose-800 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 whitespace-nowrap transition" title="Kembalikan jawaban untuk direvisi">
+                          Batalkan Jawaban
+                      </button>
+                  </form>
+              </div>
+              @endcan
+              @else
             <div class="flex items-center gap-2 flex-shrink-0">
                 @if($s->status === 'draft')
                     <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">Draf (Belum Dikumpulkan)</span>

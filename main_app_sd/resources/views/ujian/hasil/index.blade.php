@@ -128,6 +128,15 @@
                             </button>
                         </form>
                         @endif
+                        @if($attempt && $attempt->status !== 'dibatalkan')
+                        <form method="POST" action="{{ route('ujian.monitor.resetAttempt', [$ujian, $attempt]) }}" class="inline"
+                              onsubmit="return confirmAction(this, 'Reset ulang ujian {{ $siswa->nama }}? Jawaban akan dihapus dan siswa bisa mengulang dari awal.', 'red')">
+                            @csrf
+                            <button type="submit" title="Reset Ulang" aria-label="Reset Ulang" class="inline-flex p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                            </button>
+                        </form>
+                        @endif
                         @if($siswa->id_login)
                         <a href="{{ route('ujian.hasil.detail', [$ujian, $siswa->id_login]) }}" title="Lihat Jawaban" aria-label="Lihat Jawaban" class="inline-flex p-1.5 rounded-lg text-primary hover:bg-primary/10">
                             <i data-lucide="eye" class="w-4 h-4"></i>

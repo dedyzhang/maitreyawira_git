@@ -205,10 +205,14 @@ class ClassroomMaterialController extends Controller implements \Illuminate\Rout
             }
         }
         if ($user->guru) {
-            $ids = Ngajar::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
-            $classroom = $material->classrooms()->whereIn('id_kelas', $ids)->first();
-            if ($classroom) {
-                return $classroom;
+            $ngajarIds = \App\Models\Ngajar::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
+            $waliIds = \App\Models\Walikelas::where('id_guru', $user->guru->uuid)->pluck('id_kelas')->all();
+            $ids = array_unique(array_merge($ngajarIds, $waliIds));
+            if (!empty($ids)) {
+                $classroom = $material->classrooms()->whereIn('id_kelas', $ids)->first();
+                if ($classroom) {
+                    return $classroom;
+                }
             }
         }
 

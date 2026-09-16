@@ -3,7 +3,7 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto space-y-5"
-     x-data="ujianMonitor({{ Js::from(route('ujian.monitor.poll', $ujian)) }}, {{ Js::from(route('ujian.monitor.unlock', [$ujian, '__ATTEMPT__'])) }}, {{ Js::from(route('ujian.monitor.resetAttempt', [$ujian, '__ATTEMPT__'])) }})"
+     x-data="ujianMonitor({{ Js::from(route('ujian.monitor.poll', $ujian)) }}, {{ Js::from(route('ujian.monitor.unlock', [$ujian, '__ATTEMPT__'])) }})"
      x-init="init()">
     <div>
         <nav class="text-xs text-slate-400 mb-1">
@@ -57,7 +57,6 @@
                         </td>
                         <td class="px-4 py-2.5 text-right space-x-2 whitespace-nowrap">
                             <button type="button" x-show="a.dikunci" @click="bukaKunci(a)" class="text-xs text-primary hover:underline">Buka Kunci</button>
-                            <button type="button" x-show="a.attempt_uuid" @click="resetUlang(a)" class="text-xs text-rose-600 hover:underline">Reset Ulang</button>
                         </td>
                     </tr>
                 </template>
@@ -72,7 +71,7 @@
 
 @push('scripts')
 <script>
-function ujianMonitor(urlPoll, urlUnlockTemplate, urlResetTemplate) {
+function ujianMonitor(urlPoll, urlUnlockTemplate) {
     return {
         attempts: [],
         kelasOpsi: [],
@@ -106,25 +105,6 @@ function ujianMonitor(urlPoll, urlUnlockTemplate, urlResetTemplate) {
         async bukaKunci(a) {
             await this._post(urlUnlockTemplate.replace('__ATTEMPT__', a.attempt_uuid));
             this.muat();
-        },
-
-        resetUlang(a) {
-            const self = this;
-            $.confirm({
-                title: 'Reset Ulang Attempt?',
-                content: `Reset ulang attempt ${a.nama}? Siswa akan bisa memulai ujian dari nol dengan token yang sama.`,
-                type: 'orange',
-                buttons: {
-                    ya: {
-                        text: 'Ya, Reset', btnClass: 'btn-blue', keys: ['enter'],
-                        action: async function () {
-                            await self._post(urlResetTemplate.replace('__ATTEMPT__', a.attempt_uuid));
-                            self.muat();
-                        },
-                    },
-                    batal: { text: 'Batal' },
-                },
-            });
         },
 
         async _post(url) {
