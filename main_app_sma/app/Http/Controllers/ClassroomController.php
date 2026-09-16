@@ -182,8 +182,7 @@ class ClassroomController extends Controller implements \Illuminate\Routing\Cont
             return [];
         }
         $ajar = Ngajar::where('id_guru', $guru->uuid)->pluck('id_kelas')->all();
-        $wali = Walikelas::where('id_guru', $guru->uuid)->pluck('id_kelas')->all();
-        return array_values(array_unique(array_filter(array_merge($ajar, $wali))));
+        return array_values(array_unique(array_filter($ajar)));
     }
 }
 
