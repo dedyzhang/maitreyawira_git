@@ -4470,7 +4470,7 @@
                 if (!msg?.text || !this.arenaBelajarAktif || this.sendingArena) return;
                 
                 if (!this.arenaClassrooms || !this.arenaClassrooms.length) {
-                    this.error = 'Tidak ada Ruang Kelas aktif (Published) yang bisa Anda kelola untuk mengirim kuis ini.';
+                    this.error = 'Tidak ada Ruang Kelas yang bisa Anda kelola (berdasarkan setelan Jadwal Mengajar) untuk menerima kuis ini.';
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                     return;
                 }
@@ -4495,7 +4495,7 @@
                 if (!this.result || !this.arenaBelajarAktif) return;
                 
                 if (!this.arenaClassrooms || !this.arenaClassrooms.length) {
-                    this.error = 'Tidak ada Ruang Kelas aktif (Published) yang bisa Anda kelola untuk mengirim kuis ini.';
+                    this.error = 'Tidak ada Ruang Kelas yang bisa Anda kelola (berdasarkan setelan Jadwal Mengajar) untuk menerima kuis ini.';
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                     return;
                 }
