@@ -4505,8 +4505,10 @@
                     return;
                 }
                 if (this.tab === 'quiz' && this.resultSource !== 'ocr' && !this.qualityBatchCurrent()) {
+                    this.error = 'Silakan "Cek kualitas semua soal" terlebih dahulu sebelum mengirim ke Arena. Tombol cek ada di panel di bawah hasil ujian.';
                     this.qualityBatch.error = 'Cek kualitas semua soal terlebih dahulu. Pengiriman ke Arena baru dibuka setelah pemeriksaan selesai untuk hasil terbaru.';
                     this.qualityBatch.message = '';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                     return;
                 }
                 this._arenaFromNalar = !!opts.fromNalar || this.tab === 'gemini';
@@ -4523,8 +4525,10 @@
             sendToArena() {
                 if (!this.result || !this.arenaClassroomId || this.sendingArena) return;
                 if (this.tab === 'quiz' && this.resultSource !== 'ocr' && !this.qualityBatchCurrent()) {
+                    this.error = 'Silakan "Cek kualitas semua soal" terlebih dahulu sebelum mengirim ke Arena. Tombol cek ada di panel di bawah hasil ujian.';
                     this.qualityBatch.error = 'Cek kualitas semua soal terlebih dahulu sebelum mengirim ke Arena.';
                     this.showArenaModal = false;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                     return;
                 }
                 this.sendingArena = true;

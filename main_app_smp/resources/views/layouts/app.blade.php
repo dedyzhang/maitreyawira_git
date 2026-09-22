@@ -2182,7 +2182,18 @@
                 // Polling 45s (was 15s — endpoint ini request TERBANYAK di seluruh app, ~8.2rb/jam
                 // pas beban tinggi; notifikasi tak butuh sampai se-real-time itu, tunda beberapa
                 // puluh detik tak masalah) — pause saat tab hidden (simsPollInterval)
-                window.simsPollInterval(() => this.fetchNotifications(), 45000, 'notifikasi');
+                                if (!window.simsPollingNonaktif('notifikasi')) {
+                    if (window.simsFirebase) {
+                        window.simsFirebase.onReady(fb => {
+                            const triggerRef = fb.getRef(users/{{ auth()->user()->uuid ?? '' }}/sync_trigger);
+                            fb.onValue(triggerRef, (snapshot) => {
+                                if (snapshot.exists()) {
+                                    this.fetchNotifications();
+                                }
+                            });
+                        });
+                    }
+                }
             },
             async fetchNotifications() {
                 if (document.hidden) return;
@@ -2520,6 +2531,76 @@
         window.simsPollInterval(updateTickerStats, 30000, 'ticker');
     });
 </script>
+
+
+@if(config('services.firebase.api_key') && config('services.firebase.database_url'))
+{{-- Firebase JS SDK & Realtime Database Initialization --}}
+<script>
+    // Sediakan helper global secara sinkron agar Alpine.js bisa mendaftar callback lebih awal
+    window.simsFirebase = {
+        db: null,
+        getRef: null, 
+        onValue: null, onChildAdded: null, onChildChanged: null, onChildRemoved: null, query: null, limitToLast: null,
+        ready: false,
+        callbacks: [],
+        onReady: function(cb) {
+            if (this.ready) cb(this);
+            else this.callbacks.push(cb);
+        }
+    };
+</script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+    import { getDatabase, ref, onValue, onChildAdded, onChildChanged, onChildRemoved, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
+    import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    
+    const firebaseConfig = {
+        apiKey: "{{ config('services.firebase.api_key') }}",
+        authDomain: "{{ config('services.firebase.project_id') }}.firebaseapp.com",
+        databaseURL: "{{ config('services.firebase.database_url') }}",
+        projectId: "{{ config('services.firebase.project_id') }}",
+        appId: "{{ config('services.firebase.app_id') }}"
+    };
+    
+    try {
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const auth = getAuth(app);
+        
+        // Isi helper dengan instance asli (menggunakan closure untuk hindari masalah scope 'this')
+        window.simsFirebase.db = database;
+        window.simsFirebase.getRef = (path) => ref(database, path);
+        window.simsFirebase.onValue = (r, cb) => onValue(r, cb);
+        window.simsFirebase.onChildAdded = (r, cb) => onChildAdded(r, cb);
+        window.simsFirebase.onChildChanged = (r, cb) => onChildChanged(r, cb);
+        window.simsFirebase.onChildRemoved = (r, cb) => onChildRemoved(r, cb);
+        window.simsFirebase.query = (...args) => query(...args);
+        window.simsFirebase.limitToLast = (n) => limitToLast(n);
+
+        // Autentikasi dengan token dari Laravel
+        fetch("{{ route('firebase.token') }}", {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.token) {
+                signInWithCustomToken(auth, data.token).then(() => {
+                    window.simsFirebase.ready = true;
+                    window.simsFirebase.callbacks.forEach(cb => cb(window.simsFirebase));
+                }).catch(error => {
+                    console.error("Firebase auth error:", error);
+                });
+            }
+        }).catch(e => console.error("Error fetching custom token:", e));
+    } catch (e) {
+        console.error("Firebase init error:", e);
+    }
+</script>
+@endif
 
 @stack('scripts')
 </body>
